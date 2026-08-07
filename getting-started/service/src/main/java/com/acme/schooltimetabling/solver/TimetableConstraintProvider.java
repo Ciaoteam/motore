@@ -1,11 +1,12 @@
 package com.acme.schooltimetabling.solver;
 
-import org.acme.common.ConstraintIdSanitizer;
 import ai.timefold.solver.core.api.score.HardMediumSoftScore;
 import ai.timefold.solver.core.api.score.stream.Constraint;
 import ai.timefold.solver.core.api.score.stream.ConstraintFactory;
 import ai.timefold.solver.core.api.score.stream.ConstraintProvider;
 import ai.timefold.solver.core.api.score.stream.Joiners;
+
+import org.acme.common.ConstraintIdSanitizer;
 
 import com.acme.schooltimetabling.domain.Lesson;
 
