@@ -11,8 +11,10 @@ import jakarta.inject.Inject;
 
 import ai.timefold.solver.core.api.score.stream.test.ConstraintVerifier;
 
+import org.acme.employeescheduling.domain.ConstraintConfiguration.Severity;
 import org.acme.employeescheduling.domain.Employee;
 import org.acme.employeescheduling.domain.EmployeeSchedule;
+import org.acme.employeescheduling.domain.MustWorkTogether;
 import org.acme.employeescheduling.domain.Shift;
 import org.junit.jupiter.api.Test;
 
@@ -220,6 +222,67 @@ class EmployeeSchedulingConstraintProviderTest {
                         new Shift("1", DAY_START_TIME.minusDays(1), DAY_END_TIME, "Location", "Skill", employee1),
                         new Shift("2", DAY_START_TIME.minusDays(1), DAY_END_TIME, "Location", "Skill", employee2))
                 .penalizesBy(0);
-
     }
+
+    @Test
+    void mustWorkTogetherWeeklyTargetSoftPenalizesWhenBelowTarget() {
+        Employee employeeA = new Employee("Amy", null, null, null, null);
+        Employee employeeB = new Employee("Beth", null, null, null, null);
+        // Target: 3 co-shifts per week, but only 1 overlapping shift pair exists → penalty of 2
+        MustWorkTogether mw = new MustWorkTogether(employeeA, employeeB, 3, Severity.SOFT);
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::mustWorkTogetherWeeklyTargetSoft)
+                .given(mw, employeeA, employeeB,
+                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employeeA),
+                        new Shift("2", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employeeB))
+                .penalizesBy(2);
+    }
+
+    @Test
+    void mustWorkTogetherWeeklyTargetSoftNoPenaltyWhenTargetMet() {
+        Employee employeeA = new Employee("Amy", null, null, null, null);
+        Employee employeeB = new Employee("Beth", null, null, null, null);
+        // Target: 1 co-shift per week, 1 overlapping shift pair exists → no penalty
+        MustWorkTogether mw = new MustWorkTogether(employeeA, employeeB, 1, Severity.SOFT);
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::mustWorkTogetherWeeklyTargetSoft)
+                .given(mw, employeeA, employeeB,
+                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employeeA),
+                        new Shift("2", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employeeB))
+                .penalizes(0);
+    }
+
+    @Test
+    void mustWorkTogetherWeeklyTargetSoftNoPenaltyWhenTargetZero() {
+        Employee employeeA = new Employee("Amy", null, null, null, null);
+        Employee employeeB = new Employee("Beth", null, null, null, null);
+        // Target: 0 (disabled) → no penalty regardless
+        MustWorkTogether mw = new MustWorkTogether(employeeA, employeeB, 0, Severity.SOFT);
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::mustWorkTogetherWeeklyTargetSoft)
+                .given(mw, employeeA, employeeB)
+                .penalizes(0);
+    }
+
+    @Test
+    void mustWorkTogetherWeeklyTargetHardPenalizesWhenBelowTarget() {
+        Employee employeeA = new Employee("Amy", null, null, null, null);
+        Employee employeeB = new Employee("Beth", null, null, null, null);
+        // Target: 2 co-shifts per week (HARD), but only 1 overlapping shift pair → penalty of 1
+        MustWorkTogether mw = new MustWorkTogether(employeeA, employeeB, 2, Severity.HARD);
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::mustWorkTogetherWeeklyTargetHard)
+                .given(mw, employeeA, employeeB,
+                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employeeA),
+                        new Shift("2", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employeeB))
+                .penalizesBy(1);
+    }
+
+    @Test
+    void mustWorkTogetherWeeklyTargetHardIgnoresWhenSeverityIsSoft() {
+        Employee employeeA = new Employee("Amy", null, null, null, null);
+        Employee employeeB = new Employee("Beth", null, null, null, null);
+        // Severity is SOFT → HARD constraint should not fire
+        MustWorkTogether mw = new MustWorkTogether(employeeA, employeeB, 3, Severity.SOFT);
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::mustWorkTogetherWeeklyTargetHard)
+                .given(mw, employeeA, employeeB)
+                .penalizes(0);
+    }
+
 }
