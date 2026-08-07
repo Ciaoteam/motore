@@ -1,5 +1,6 @@
 package org.acme.facilitylocation.solver;
 
+import org.acme.common.ConstraintIdSanitizer;
 import ai.timefold.solver.core.api.score.HardSoftScore;
 import ai.timefold.solver.core.api.score.stream.Constraint;
 import ai.timefold.solver.core.api.score.stream.ConstraintFactory;
@@ -29,20 +30,20 @@ public class FacilityLocationConstraintProvider implements ConstraintProvider {
                 .groupBy(Consumer::getFacility, sum(Consumer::getDemand))
                 .filter((facility, demand) -> demand > facility.getCapacity())
                 .penalize(ONE_HARD, (facility, demand) -> demand - facility.getCapacity())
-                .asConstraint("facility capacity");
+                .asConstraint(ConstraintIdSanitizer.sanitize("facility capacity"));
     }
 
     Constraint setupCost(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(Consumer.class)
                 .groupBy(Consumer::getFacility)
                 .penalize(HardSoftScore.ofSoft(2), Facility::getSetupCost)
-                .asConstraint("facility setup cost");
+                .asConstraint(ConstraintIdSanitizer.sanitize("facility setup cost"));
     }
 
     Constraint distanceFromFacility(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(Consumer.class)
                 .filter(Consumer::isAssigned)
                 .penalize(HardSoftScore.ofSoft(5), Consumer::distanceFromFacility)
-                .asConstraint("distance from facility");
+                .asConstraint(ConstraintIdSanitizer.sanitize("distance from facility"));
     }
 }

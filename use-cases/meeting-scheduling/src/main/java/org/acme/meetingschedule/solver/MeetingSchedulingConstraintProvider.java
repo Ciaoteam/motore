@@ -1,5 +1,6 @@
 package org.acme.meetingschedule.solver;
 
+import org.acme.common.ConstraintIdSanitizer;
 import static ai.timefold.solver.core.api.score.stream.Joiners.equal;
 import static ai.timefold.solver.core.api.score.stream.Joiners.filtering;
 import static ai.timefold.solver.core.api.score.stream.Joiners.greaterThan;
@@ -53,7 +54,7 @@ public class MeetingSchedulingConstraintProvider implements ConstraintProvider {
                 overlapping(MeetingAssignment::getGrainIndex, assignment -> assignment.getLastTimeGrainIndex() + 1))
                 .penalize(HardMediumSoftScore.ONE_HARD,
                         (leftAssignment, rightAssignment) -> rightAssignment.calculateOverlap(leftAssignment))
-                .asConstraint("Room conflict");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Room conflict"));
     }
 
     public Constraint avoidOvertime(ConstraintFactory constraintFactory) {
@@ -62,7 +63,7 @@ public class MeetingSchedulingConstraintProvider implements ConstraintProvider {
                 .ifNotExists(TimeGrain.class,
                         equal(MeetingAssignment::getLastTimeGrainIndex, TimeGrain::getGrainIndex))
                 .penalize(HardMediumSoftScore.ONE_HARD, MeetingAssignment::getLastTimeGrainIndex)
-                .asConstraint("Don't go in overtime");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Don't go in overtime"));
     }
 
     public Constraint requiredAttendanceConflict(ConstraintFactory constraintFactory) {
@@ -82,7 +83,7 @@ public class MeetingSchedulingConstraintProvider implements ConstraintProvider {
                 .penalize(HardMediumSoftScore.ONE_HARD,
                         (leftRequiredAttendance, rightRequiredAttendance, leftAssignment, rightAssignment) -> rightAssignment
                                 .calculateOverlap(leftAssignment))
-                .asConstraint("Required attendance conflict");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Required attendance conflict"));
     }
 
     public Constraint requiredRoomCapacity(ConstraintFactory constraintFactory) {
@@ -90,7 +91,7 @@ public class MeetingSchedulingConstraintProvider implements ConstraintProvider {
                 .filter(meetingAssignment -> meetingAssignment.getRequiredCapacity() > meetingAssignment.getRoomCapacity())
                 .penalize(HardMediumSoftScore.ONE_HARD,
                         meetingAssignment -> meetingAssignment.getRequiredCapacity() - meetingAssignment.getRoomCapacity())
-                .asConstraint("Required room capacity");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Required room capacity"));
     }
 
     public Constraint startAndEndOnSameDay(ConstraintFactory constraintFactory) {
@@ -102,7 +103,7 @@ public class MeetingSchedulingConstraintProvider implements ConstraintProvider {
                                 timeGrain) -> !meetingAssignment.getStartingTimeGrain().getDayOfYear()
                                         .equals(timeGrain.getDayOfYear())))
                 .penalize(HardMediumSoftScore.ONE_HARD)
-                .asConstraint("Start and end on same day");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Start and end on same day"));
     }
 
     // ************************************************************************
@@ -128,7 +129,7 @@ public class MeetingSchedulingConstraintProvider implements ConstraintProvider {
                 .penalize(HardMediumSoftScore.ONE_MEDIUM,
                         (requiredAttendance, preferredAttendance, leftAssignment, rightAssignment) -> rightAssignment
                                 .calculateOverlap(leftAssignment))
-                .asConstraint("Required and preferred attendance conflict");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Required and preferred attendance conflict"));
     }
 
     public Constraint preferredAttendanceConflict(ConstraintFactory constraintFactory) {
@@ -149,7 +150,7 @@ public class MeetingSchedulingConstraintProvider implements ConstraintProvider {
                 .penalize(HardMediumSoftScore.ONE_MEDIUM,
                         (leftPreferredAttendance, rightPreferredAttendance, leftAssignment, rightAssignment) -> rightAssignment
                                 .calculateOverlap(leftAssignment))
-                .asConstraint("Preferred attendance conflict");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Preferred attendance conflict"));
     }
 
     // ************************************************************************
@@ -160,7 +161,7 @@ public class MeetingSchedulingConstraintProvider implements ConstraintProvider {
         return constraintFactory.forEachIncludingUnassigned(MeetingAssignment.class)
                 .filter(meetingAssignment -> meetingAssignment.getStartingTimeGrain() != null)
                 .penalize(HardMediumSoftScore.ONE_SOFT, MeetingAssignment::getLastTimeGrainIndex)
-                .asConstraint("Do all meetings as soon as possible");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Do all meetings as soon as possible"));
     }
 
     public Constraint oneBreakBetweenConsecutiveMeetings(ConstraintFactory constraintFactory) {
@@ -171,7 +172,7 @@ public class MeetingSchedulingConstraintProvider implements ConstraintProvider {
                         equal(MeetingAssignment::getLastTimeGrainIndex,
                                 rightAssignment -> rightAssignment.getGrainIndex() - 1))
                 .penalize(HardMediumSoftScore.ofSoft(100))
-                .asConstraint("One TimeGrain break between two consecutive meetings");
+                .asConstraint(ConstraintIdSanitizer.sanitize("One TimeGrain break between two consecutive meetings"));
     }
 
     public Constraint overlappingMeetings(ConstraintFactory constraintFactory) {
@@ -184,7 +185,7 @@ public class MeetingSchedulingConstraintProvider implements ConstraintProvider {
                         overlapping(MeetingAssignment::getGrainIndex,
                                 assignment -> assignment.getLastTimeGrainIndex() + 1))
                 .penalize(HardMediumSoftScore.ofSoft(10), MeetingAssignment::calculateOverlap)
-                .asConstraint("Overlapping meetings");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Overlapping meetings"));
     }
 
     public Constraint assignLargerRoomsFirst(ConstraintFactory constraintFactory) {
@@ -194,7 +195,7 @@ public class MeetingSchedulingConstraintProvider implements ConstraintProvider {
                         lessThan(MeetingAssignment::getRoomCapacity, Room::getCapacity))
                 .penalize(HardMediumSoftScore.ONE_SOFT,
                         (meetingAssignment, room) -> room.getCapacity() - meetingAssignment.getRoomCapacity())
-                .asConstraint("Assign larger rooms first");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Assign larger rooms first"));
     }
 
     public Constraint roomStability(ConstraintFactory constraintFactory) {
@@ -218,7 +219,7 @@ public class MeetingSchedulingConstraintProvider implements ConstraintProvider {
                                         leftAttendance.getMeeting().getDurationInGrains() -
                                         leftAssignment.getGrainIndex() <= 2))
                 .penalize(HardMediumSoftScore.ONE_SOFT)
-                .asConstraint("Room stability");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Room stability"));
     }
 
 }
