@@ -1,5 +1,6 @@
 package org.acme.tournamentschedule.solver;
 
+import org.acme.common.ConstraintIdSanitizer;
 import static ai.timefold.solver.core.api.score.stream.ConstraintCollectors.loadBalance;
 import static ai.timefold.solver.core.api.score.stream.Joiners.equal;
 import static ai.timefold.solver.core.api.score.stream.Joiners.lessThan;
@@ -37,7 +38,7 @@ public class TournamentScheduleConstraintProvider implements ConstraintProvider 
                         equal(TeamAssignment::getDay),
                         lessThan(TeamAssignment::getId))
                 .penalize(HardMediumSoftBigDecimalScore.ONE_HARD)
-                .asConstraint("oneAssignmentPerDatePerTeam");
+                .asConstraint(ConstraintIdSanitizer.sanitize("oneAssignmentPerDatePerTeam"));
     }
 
     Constraint unavailabilityPenalty(ConstraintFactory constraintFactory) {
@@ -46,14 +47,14 @@ public class TournamentScheduleConstraintProvider implements ConstraintProvider 
                         equal(UnavailabilityPenalty::getTeam, TeamAssignment::getTeam),
                         equal(UnavailabilityPenalty::getDay, TeamAssignment::getDay))
                 .penalize(HardMediumSoftBigDecimalScore.ONE_HARD)
-                .asConstraint("unavailabilityPenalty");
+                .asConstraint(ConstraintIdSanitizer.sanitize("unavailabilityPenalty"));
     }
 
     Constraint fairAssignmentCountPerTeam(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(TeamAssignment.class)
                 .groupBy(loadBalance(TeamAssignment::getTeam))
                 .penalizeBigDecimal(HardMediumSoftBigDecimalScore.ONE_MEDIUM, LoadBalance::unfairness)
-                .asConstraint("fairAssignmentCountPerTeam");
+                .asConstraint(ConstraintIdSanitizer.sanitize("fairAssignmentCountPerTeam"));
     }
 
     Constraint evenlyConfrontationCount(ConstraintFactory constraintFactory) {
@@ -64,7 +65,7 @@ public class TournamentScheduleConstraintProvider implements ConstraintProvider 
                 .groupBy(loadBalance(
                         (assignment, otherAssignment) -> new Pair<>(assignment.getTeam(), otherAssignment.getTeam())))
                 .penalizeBigDecimal(HardMediumSoftBigDecimalScore.ONE_SOFT, LoadBalance::unfairness)
-                .asConstraint("evenlyConfrontationCount");
+                .asConstraint(ConstraintIdSanitizer.sanitize("evenlyConfrontationCount"));
     }
 
     public record Pair<A, B>(A key, B value) {

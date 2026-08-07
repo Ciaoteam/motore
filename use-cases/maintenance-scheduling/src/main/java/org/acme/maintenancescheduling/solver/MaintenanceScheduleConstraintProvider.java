@@ -1,5 +1,6 @@
 package org.acme.maintenancescheduling.solver;
 
+import org.acme.common.ConstraintIdSanitizer;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -48,7 +49,7 @@ public class MaintenanceScheduleConstraintProvider implements ConstraintProvider
                                         ? job1.getStartDate() : job2.getStartDate(),
                                 job1.getEndDate().isBefore(job2.getEndDate())
                                         ? job1.getEndDate() : job2.getEndDate()))
-                .asConstraint("Crew conflict");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Crew conflict"));
     }
 
     public Constraint minStartDate(ConstraintFactory constraintFactory) {
@@ -58,7 +59,7 @@ public class MaintenanceScheduleConstraintProvider implements ConstraintProvider
                         && job.getStartDate().isBefore(job.getMinStartDate()))
                 .penalize(HardSoftScore.ONE_HARD,
                         job -> DAYS.between(job.getStartDate(), job.getMinStartDate()))
-                .asConstraint("Min start date");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Min start date"));
     }
 
     public Constraint maxEndDate(ConstraintFactory constraintFactory) {
@@ -68,7 +69,7 @@ public class MaintenanceScheduleConstraintProvider implements ConstraintProvider
                         && job.getEndDate().isAfter(job.getMaxEndDate()))
                 .penalize(HardSoftScore.ONE_HARD,
                         job -> DAYS.between(job.getMaxEndDate(), job.getEndDate()))
-                .asConstraint("Max end date");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Max end date"));
     }
 
     // ************************************************************************
@@ -82,7 +83,7 @@ public class MaintenanceScheduleConstraintProvider implements ConstraintProvider
                         && job.getEndDate().isBefore(job.getIdealEndDate()))
                 .penalize(HardSoftScore.ofSoft(1),
                         job -> DAYS.between(job.getEndDate(), job.getIdealEndDate()))
-                .asConstraint("Before ideal end date");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Before ideal end date"));
     }
 
     public Constraint afterIdealEndDate(ConstraintFactory constraintFactory) {
@@ -92,7 +93,7 @@ public class MaintenanceScheduleConstraintProvider implements ConstraintProvider
                         && job.getEndDate().isAfter(job.getIdealEndDate()))
                 .penalize(HardSoftScore.ofSoft(1_000_000),
                         job -> DAYS.between(job.getIdealEndDate(), job.getEndDate()))
-                .asConstraint("After ideal end date");
+                .asConstraint(ConstraintIdSanitizer.sanitize("After ideal end date"));
     }
     
     public Constraint tagConflict(ConstraintFactory constraintFactory) {
@@ -112,7 +113,7 @@ public class MaintenanceScheduleConstraintProvider implements ConstraintProvider
                                             ? job1.getEndDate() : job2.getEndDate());
                             return intersection.size() * overlap;
                         })
-                .asConstraint("Tag conflict");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Tag conflict"));
     }
 
 }

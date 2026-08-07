@@ -1,5 +1,6 @@
 package com.acme.schooltimetabling.solver;
 
+import org.acme.common.ConstraintIdSanitizer;
 import ai.timefold.solver.core.api.score.HardMediumSoftScore;
 import ai.timefold.solver.core.api.score.stream.Constraint;
 import ai.timefold.solver.core.api.score.stream.ConstraintFactory;
@@ -32,7 +33,7 @@ public class TimetableConstraintProvider implements ConstraintProvider {
                         Joiners.equal(Lesson::getRoom))
                 // ... and penalize each pair with a hard weight.
                 .penalize(HardMediumSoftScore.ONE_HARD)
-                .asConstraint("Room conflict");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Room conflict"));
     }
 
     Constraint teacherConflict(ConstraintFactory constraintFactory) {
@@ -42,7 +43,7 @@ public class TimetableConstraintProvider implements ConstraintProvider {
                         Joiners.equal(Lesson::getTimeslot),
                         Joiners.equal(Lesson::getTeacher))
                 .penalize(HardMediumSoftScore.ONE_HARD)
-                .asConstraint("Teacher conflict");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Teacher conflict"));
     }
 
     Constraint studentGroupConflict(ConstraintFactory constraintFactory) {
@@ -52,6 +53,6 @@ public class TimetableConstraintProvider implements ConstraintProvider {
                         Joiners.equal(Lesson::getTimeslot),
                         Joiners.equal(Lesson::getStudentGroup))
                 .penalize(HardMediumSoftScore.ONE_HARD)
-                .asConstraint("Student group conflict");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Student group conflict"));
     }
 }

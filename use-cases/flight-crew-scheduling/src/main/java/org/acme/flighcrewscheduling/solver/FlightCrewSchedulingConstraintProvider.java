@@ -1,5 +1,6 @@
 package org.acme.flighcrewscheduling.solver;
 
+import org.acme.common.ConstraintIdSanitizer;
 import static ai.timefold.solver.core.api.score.stream.Joiners.equal;
 import static ai.timefold.solver.core.api.score.stream.Joiners.filtering;
 import static ai.timefold.solver.core.api.score.stream.Joiners.greaterThan;
@@ -37,7 +38,7 @@ public class FlightCrewSchedulingConstraintProvider implements ConstraintProvide
         return constraintFactory.forEach(FlightAssignment.class)
                 .filter(flightAssignment -> !flightAssignment.hasRequiredSkills())
                 .penalize(HardSoftScore.ofHard(100))
-                .asConstraint("Required skill");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Required skill"));
     }
 
     public Constraint flightConflict(ConstraintFactory constraintFactory) {
@@ -46,7 +47,7 @@ public class FlightCrewSchedulingConstraintProvider implements ConstraintProvide
                 overlapping(flightAssignment -> flightAssignment.getFlight().getDepartureUTCDateTime(),
                         flightAssignment -> flightAssignment.getFlight().getArrivalUTCDateTime()))
                 .penalize(HardSoftScore.ofHard(10))
-                .asConstraint("Flight conflict");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Flight conflict"));
     }
 
     public Constraint transferBetweenTwoFlights(ConstraintFactory constraintFactory) {
@@ -69,14 +70,14 @@ public class FlightCrewSchedulingConstraintProvider implements ConstraintProvide
                         flightAssignment2) -> !flightAssignment.getFlight().getArrivalAirport()
                                 .equals(flightAssignment2.getFlight().getDepartureAirport()))
                 .penalize(HardSoftScore.ofHard(1))
-                .asConstraint("Transfer between two flights");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Transfer between two flights"));
     }
 
     public Constraint employeeUnavailability(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(FlightAssignment.class)
                 .filter(FlightAssignment::isUnavailableEmployee)
                 .penalize(HardSoftScore.ofHard(10))
-                .asConstraint("Employee unavailable");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Employee unavailable"));
     }
 
     public Constraint firstAssignmentNotDepartingFromHome(ConstraintFactory constraintFactory) {
@@ -90,7 +91,7 @@ public class FlightCrewSchedulingConstraintProvider implements ConstraintProvide
                         flightAssignment) -> !employee.getHomeAirport()
                                 .equals(flightAssignment.getFlight().getDepartureAirport()))
                 .penalize(HardSoftScore.ofSoft(1000))
-                .asConstraint("First assignment not departing from home");
+                .asConstraint(ConstraintIdSanitizer.sanitize("First assignment not departing from home"));
     }
 
     public Constraint lastAssignmentNotArrivingAtHome(ConstraintFactory constraintFactory) {
@@ -104,7 +105,7 @@ public class FlightCrewSchedulingConstraintProvider implements ConstraintProvide
                         flightAssignment) -> !employee.getHomeAirport()
                                 .equals(flightAssignment.getFlight().getArrivalAirport()))
                 .penalize(HardSoftScore.ofSoft(1000))
-                .asConstraint("Last assignment not arriving at home");
+                .asConstraint(ConstraintIdSanitizer.sanitize("Last assignment not arriving at home"));
     }
 
 }

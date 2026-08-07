@@ -1,5 +1,6 @@
 package org.acme.kotlin.schooltimetabling.solver
 
+import org.acme.common.ConstraintIdSanitizer
 import ai.timefold.solver.core.api.score.HardSoftScore
 import ai.timefold.solver.core.api.score.stream.Constraint
 import ai.timefold.solver.core.api.score.stream.ConstraintFactory
@@ -46,7 +47,7 @@ class TimeTableConstraintProvider : ConstraintProvider {
             .justifyWith { lesson1: Lesson, lesson2: Lesson, _ ->
                 RoomConflictJustification(lesson1.room!!, lesson1, lesson2)
             }
-            .asConstraint("Room conflict")
+            .asConstraint(ConstraintIdSanitizer.sanitize("Room conflict"))
     }
 
     fun teacherConflict(constraintFactory: ConstraintFactory): Constraint {
@@ -61,7 +62,7 @@ class TimeTableConstraintProvider : ConstraintProvider {
             .justifyWith { lesson1: Lesson, lesson2: Lesson, _ ->
                 TeacherConflictJustification(lesson1.teacher, lesson1, lesson2)
             }
-            .asConstraint("Teacher conflict")
+            .asConstraint(ConstraintIdSanitizer.sanitize("Teacher conflict"))
     }
 
     fun studentGroupConflict(constraintFactory: ConstraintFactory): Constraint {
@@ -76,7 +77,7 @@ class TimeTableConstraintProvider : ConstraintProvider {
             .justifyWith { lesson1: Lesson, lesson2: Lesson, _ ->
                 StudentGroupConflictJustification(lesson1.studentGroup, lesson1, lesson2)
             }
-            .asConstraint("Student group conflict")
+            .asConstraint(ConstraintIdSanitizer.sanitize("Student group conflict"))
     }
 
     fun teacherRoomStability(constraintFactory: ConstraintFactory): Constraint {
@@ -91,7 +92,7 @@ class TimeTableConstraintProvider : ConstraintProvider {
             .justifyWith { lesson1: Lesson, lesson2: Lesson, _ ->
                 TeacherRoomStabilityJustification(lesson1.teacher, lesson1, lesson2)
             }
-            .asConstraint("Teacher room stability")
+            .asConstraint(ConstraintIdSanitizer.sanitize("Teacher room stability"))
     }
 
     fun teacherTimeEfficiency(constraintFactory: ConstraintFactory): Constraint {
@@ -112,7 +113,7 @@ class TimeTableConstraintProvider : ConstraintProvider {
             .justifyWith{ lesson1: Lesson, lesson2: Lesson, _ ->
                 TeacherTimeEfficiencyJustification(lesson1.teacher, lesson1, lesson2)
             }
-            .asConstraint("Teacher time efficiency")
+            .asConstraint(ConstraintIdSanitizer.sanitize("Teacher time efficiency"))
     }
 
     fun studentGroupSubjectVariety(constraintFactory: ConstraintFactory): Constraint {
@@ -134,7 +135,7 @@ class TimeTableConstraintProvider : ConstraintProvider {
             .justifyWith { lesson1: Lesson, lesson2: Lesson, _ ->
                 StudentGroupSubjectVarietyJustification(lesson1.studentGroup, lesson1, lesson2)
             }
-            .asConstraint("Student group subject variety")
+            .asConstraint(ConstraintIdSanitizer.sanitize("Student group subject variety"))
     }
 
 }
