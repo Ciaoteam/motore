@@ -323,6 +323,9 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
     }
 
     // Must work together - weekly co-shift target not met (HARD)
+    // Note: this constraint only penalises the shortfall when at least one overlapping co-shift
+    // already exists in the week.  Weeks where the pair has zero co-shifts but one of them works
+    // are already covered by the existing mustWorkTogetherHard constraint.
     Constraint mustWorkTogetherWeeklyTargetHard(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(MustWorkTogether.class)
                 .filter(mw -> mw.getTargetShiftsPerWeek() > 0
@@ -336,19 +339,24 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                         overlapping((mw, shiftA) -> shiftA.getStart(),
                                     (mw, shiftA) -> shiftA.getEnd(),
                                     Shift::getStart, Shift::getEnd))
-                // Count how many overlapping co-shifts happen per (pair, week)
+                // Count how many overlapping co-shifts happen per (pair, ISO week).
+                // The composite "year-week" key avoids cross-year collisions.
                 .groupBy(
                         (mw, shiftA, shiftB) -> mw,
-                        (mw, shiftA, shiftB) -> shiftA.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        (mw, shiftA, shiftB) -> shiftA.getStart().get(WeekFields.ISO.weekBasedYear()) * 100
+                                + shiftA.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
                         ConstraintCollectors.countTri())
                 // Penalize for each shift short of the target
-                .filter((mw, week, count) -> count < mw.getTargetShiftsPerWeek())
+                .filter((mw, yearWeek, count) -> count < mw.getTargetShiftsPerWeek())
                 .penalize(HardSoftBigDecimalScore.ONE_HARD,
-                        (mw, week, count) -> mw.getTargetShiftsPerWeek() - count)
+                        (mw, yearWeek, count) -> mw.getTargetShiftsPerWeek() - count)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Must work together - weekly target not met (HARD)"));
     }
 
     // Must work together - weekly co-shift target not met (SOFT)
+    // Note: this constraint only penalises the shortfall when at least one overlapping co-shift
+    // already exists in the week.  Weeks where the pair has zero co-shifts but one of them works
+    // are already covered by the existing mustWorkTogetherSoft constraint.
     Constraint mustWorkTogetherWeeklyTargetSoft(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(MustWorkTogether.class)
                 .filter(mw -> mw.getTargetShiftsPerWeek() > 0
@@ -362,11 +370,12 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                                     Shift::getStart, Shift::getEnd))
                 .groupBy(
                         (mw, shiftA, shiftB) -> mw,
-                        (mw, shiftA, shiftB) -> shiftA.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        (mw, shiftA, shiftB) -> shiftA.getStart().get(WeekFields.ISO.weekBasedYear()) * 100
+                                + shiftA.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
                         ConstraintCollectors.countTri())
-                .filter((mw, week, count) -> count < mw.getTargetShiftsPerWeek())
+                .filter((mw, yearWeek, count) -> count < mw.getTargetShiftsPerWeek())
                 .penalize(HardSoftBigDecimalScore.ONE_SOFT,
-                        (mw, week, count) -> mw.getTargetShiftsPerWeek() - count)
+                        (mw, yearWeek, count) -> mw.getTargetShiftsPerWeek() - count)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Must work together - weekly target not met (SOFT)"));
     }
 
