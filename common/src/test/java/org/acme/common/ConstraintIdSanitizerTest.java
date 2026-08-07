@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 class ConstraintIdSanitizerTest {
 
-    private static final Pattern ALLOWED_CONSTRAINT_ID_PATTERN = Pattern.compile("[A-Za-z0-9 _'()\-.]+");
+    private static final Pattern ALLOWED_CONSTRAINT_ID_PATTERN = Pattern.compile("[A-Za-z0-9 _'().-]+");
 
     @Test
     void sanitizeReplacesInvalidCharacters() {
