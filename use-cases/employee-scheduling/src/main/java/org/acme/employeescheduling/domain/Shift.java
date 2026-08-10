@@ -92,6 +92,10 @@ public class Shift {
         this.employee = employee;
     }
 
+    public int getDurationInMinutes() {
+        return (int) ChronoUnit.MINUTES.between(start, end);
+    }
+
     public boolean isOverlappingWithDate(LocalDate date) {
         return getStart().toLocalDate().equals(date) || getEnd().toLocalDate().equals(date);
     }

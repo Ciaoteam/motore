@@ -15,6 +15,9 @@ public class Employee {
     private Set<LocalDate> undesiredDates;
     private Set<LocalDate> desiredDates;
 
+    private Integer minWeeklyMinutes;
+    private String minWeeklySeverity; // "SOFT" or "HARD", defaults to "SOFT"
+
     public Employee() {
 
     }
@@ -66,6 +69,22 @@ public class Employee {
 
     public void setDesiredDates(Set<LocalDate> desiredDates) {
         this.desiredDates = desiredDates;
+    }
+
+    public Integer getMinWeeklyMinutes() {
+        return minWeeklyMinutes;
+    }
+
+    public void setMinWeeklyMinutes(Integer minWeeklyMinutes) {
+        this.minWeeklyMinutes = minWeeklyMinutes;
+    }
+
+    public String getMinWeeklySeverity() {
+        return minWeeklySeverity;
+    }
+
+    public void setMinWeeklySeverity(String minWeeklySeverity) {
+        this.minWeeklySeverity = minWeeklySeverity;
     }
 
     @Override
