@@ -62,7 +62,10 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 balanceEmployeeShiftAssignments(constraintFactory),
                 // Goal constraints (SOFT variants)
                 goalShiftsPerWeekSoft(constraintFactory),
-                goalMinutesPerWeekSoft(constraintFactory)
+                goalMinutesPerWeekSoft(constraintFactory),
+                // Min weekly hours per employee
+                minWeeklyHoursHard(constraintFactory),
+                minWeeklyHoursSoft(constraintFactory)
         };
     }
 
@@ -317,6 +320,38 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                             return (int) Math.abs(tot - cfg.getTargetMinutesPerWeek());
                         })
                 .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target minutes per employee per week (SOFT)"));
+    }
+
+    // Min weekly hours per employee (HARD)
+    Constraint minWeeklyHoursHard(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Shift.class)
+                .filter(shift -> shift.getEmployee() != null)
+                .filter(shift -> shift.getEmployee().getMinWeeklyMinutes() != null
+                        && shift.getEmployee().getMinWeeklyMinutes() > 0)
+                .filter(shift -> "HARD".equalsIgnoreCase(shift.getEmployee().getMinWeeklySeverity()))
+                .groupBy(Shift::getEmployee,
+                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        ConstraintCollectors.sum(Shift::getDurationInMinutes))
+                .filter((employee, week, totalMinutes) -> totalMinutes < employee.getMinWeeklyMinutes())
+                .penalize(HardSoftBigDecimalScore.ONE_HARD,
+                        (employee, week, totalMinutes) -> employee.getMinWeeklyMinutes() - totalMinutes)
+                .asConstraint(ConstraintIdSanitizer.sanitize("Min weekly hours per employee (HARD)"));
+    }
+
+    // Min weekly hours per employee (SOFT)
+    Constraint minWeeklyHoursSoft(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Shift.class)
+                .filter(shift -> shift.getEmployee() != null)
+                .filter(shift -> shift.getEmployee().getMinWeeklyMinutes() != null
+                        && shift.getEmployee().getMinWeeklyMinutes() > 0)
+                .filter(shift -> !"HARD".equalsIgnoreCase(shift.getEmployee().getMinWeeklySeverity()))
+                .groupBy(Shift::getEmployee,
+                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        ConstraintCollectors.sum(Shift::getDurationInMinutes))
+                .filter((employee, week, totalMinutes) -> totalMinutes < employee.getMinWeeklyMinutes())
+                .penalize(HardSoftBigDecimalScore.ONE_SOFT,
+                        (employee, week, totalMinutes) -> employee.getMinWeeklyMinutes() - totalMinutes)
+                .asConstraint(ConstraintIdSanitizer.sanitize("Min weekly hours per employee (SOFT)"));
     }
 
 }
