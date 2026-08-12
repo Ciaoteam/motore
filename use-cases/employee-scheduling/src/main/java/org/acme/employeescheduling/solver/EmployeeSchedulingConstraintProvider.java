@@ -65,7 +65,10 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 goalMinutesPerWeekSoft(constraintFactory),
                 // Min weekly hours per employee
                 minWeeklyHoursHard(constraintFactory),
-                minWeeklyHoursSoft(constraintFactory)
+                minWeeklyHoursSoft(constraintFactory),
+                // Per-employee target shifts per week
+                goalShiftsPerWeekPerEmployeeHard(constraintFactory),
+                goalShiftsPerWeekPerEmployeeSoft(constraintFactory)
         };
     }
 
@@ -352,6 +355,38 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 .penalize(HardSoftBigDecimalScore.ONE_SOFT,
                         (employee, week, totalMinutes) -> employee.getMinWeeklyMinutes() - totalMinutes)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Min weekly hours per employee (SOFT)"));
+    }
+
+    // Goal: target shifts per week per individual employee (HARD)
+    Constraint goalShiftsPerWeekPerEmployeeHard(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Shift.class)
+                .filter(shift -> shift.getEmployee() != null)
+                .filter(shift -> shift.getEmployee().getTargetShiftsPerWeek() != null
+                        && shift.getEmployee().getTargetShiftsPerWeek() > 0)
+                .filter(shift -> "HARD".equalsIgnoreCase(shift.getEmployee().getTargetShiftsPerWeekSeverity()))
+                .groupBy(Shift::getEmployee,
+                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        ConstraintCollectors.count())
+                .filter((employee, week, shiftCount) -> shiftCount != employee.getTargetShiftsPerWeek())
+                .penalize(HardSoftBigDecimalScore.ONE_HARD,
+                        (employee, week, shiftCount) -> Math.abs(shiftCount - employee.getTargetShiftsPerWeek()))
+                .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target shifts per employee per week - individual (HARD)"));
+    }
+
+    // Goal: target shifts per week per individual employee (SOFT)
+    Constraint goalShiftsPerWeekPerEmployeeSoft(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Shift.class)
+                .filter(shift -> shift.getEmployee() != null)
+                .filter(shift -> shift.getEmployee().getTargetShiftsPerWeek() != null
+                        && shift.getEmployee().getTargetShiftsPerWeek() > 0)
+                .filter(shift -> "SOFT".equalsIgnoreCase(shift.getEmployee().getTargetShiftsPerWeekSeverity()))
+                .groupBy(Shift::getEmployee,
+                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        ConstraintCollectors.count())
+                .filter((employee, week, shiftCount) -> shiftCount != employee.getTargetShiftsPerWeek())
+                .penalize(HardSoftBigDecimalScore.ONE_SOFT,
+                        (employee, week, shiftCount) -> Math.abs(shiftCount - employee.getTargetShiftsPerWeek()))
+                .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target shifts per employee per week - individual (SOFT)"));
     }
 
 }
