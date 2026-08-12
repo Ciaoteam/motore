@@ -54,7 +54,9 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 maxMonthlyHoursSoft(constraintFactory),
                 // Goal constraints (HARD variants will only apply if configured as HARD)
                 goalShiftsPerWeekHard(constraintFactory),
+                goalShiftsPerWeekHardZero(constraintFactory),
                 goalMinutesPerWeekHard(constraintFactory),
+                goalMinutesPerWeekHardZero(constraintFactory),
 
                 // Soft constraints
                 undesiredDayForEmployee(constraintFactory),
@@ -62,13 +64,19 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 balanceEmployeeShiftAssignments(constraintFactory),
                 // Goal constraints (SOFT variants)
                 goalShiftsPerWeekSoft(constraintFactory),
+                goalShiftsPerWeekSoftZero(constraintFactory),
                 goalMinutesPerWeekSoft(constraintFactory),
+                goalMinutesPerWeekSoftZero(constraintFactory),
                 // Min weekly hours per employee
                 minWeeklyHoursHard(constraintFactory),
+                minWeeklyHoursHardZero(constraintFactory),
                 minWeeklyHoursSoft(constraintFactory),
+                minWeeklyHoursSoftZero(constraintFactory),
                 // Per-employee target shifts per week
                 goalShiftsPerWeekPerEmployeeHard(constraintFactory),
-                goalShiftsPerWeekPerEmployeeSoft(constraintFactory)
+                goalShiftsPerWeekPerEmployeeHardZero(constraintFactory),
+                goalShiftsPerWeekPerEmployeeSoft(constraintFactory),
+                goalShiftsPerWeekPerEmployeeSoftZero(constraintFactory)
         };
     }
 
@@ -395,6 +403,92 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                         (employee, week, shiftCount) ->
                                 Math.abs(shiftCount - employee.getTargetShiftsPerWeek().intValue()))
                 .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target shifts per employee per week - individual (SOFT)"));
+    }
+
+    // Zero-shift companions: employees with a target but NO assigned shifts at all
+
+    Constraint goalShiftsPerWeekPerEmployeeHardZero(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Employee.class)
+                .filter(e -> e.getTargetShiftsPerWeek() != null
+                        && e.getTargetShiftsPerWeek() > 0
+                        && "HARD".equalsIgnoreCase(e.getTargetShiftsPerWeekSeverity()))
+                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+                .penalize(HardSoftBigDecimalScore.ONE_HARD, Employee::getTargetShiftsPerWeek)
+                .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target shifts per employee per week - individual zero (HARD)"));
+    }
+
+    Constraint goalShiftsPerWeekPerEmployeeSoftZero(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Employee.class)
+                .filter(e -> e.getTargetShiftsPerWeek() != null
+                        && e.getTargetShiftsPerWeek() > 0
+                        && "SOFT".equalsIgnoreCase(e.getTargetShiftsPerWeekSeverity()))
+                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+                .penalize(HardSoftBigDecimalScore.ONE_SOFT, Employee::getTargetShiftsPerWeek)
+                .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target shifts per employee per week - individual zero (SOFT)"));
+    }
+
+    Constraint minWeeklyHoursHardZero(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Employee.class)
+                .filter(e -> e.getMinWeeklyMinutes() != null
+                        && e.getMinWeeklyMinutes() > 0
+                        && "HARD".equalsIgnoreCase(e.getMinWeeklySeverity()))
+                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+                .penalize(HardSoftBigDecimalScore.ONE_HARD, Employee::getMinWeeklyMinutes)
+                .asConstraint(ConstraintIdSanitizer.sanitize("Min weekly hours per employee zero (HARD)"));
+    }
+
+    Constraint minWeeklyHoursSoftZero(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Employee.class)
+                .filter(e -> e.getMinWeeklyMinutes() != null
+                        && e.getMinWeeklyMinutes() > 0
+                        && !"HARD".equalsIgnoreCase(e.getMinWeeklySeverity()))
+                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+                .penalize(HardSoftBigDecimalScore.ONE_SOFT, Employee::getMinWeeklyMinutes)
+                .asConstraint(ConstraintIdSanitizer.sanitize("Min weekly hours per employee zero (SOFT)"));
+    }
+
+    Constraint goalShiftsPerWeekHardZero(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Employee.class)
+                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+                .join(ConstraintConfiguration.class)
+                .filter((employee, cfg) -> cfg.getTargetShiftsPerWeek() > 0
+                        && cfg.getTargetShiftsPerWeekSeverity() == ConstraintConfiguration.Severity.HARD)
+                .penalize(HardSoftBigDecimalScore.ONE_HARD,
+                        (employee, cfg) -> cfg.getTargetShiftsPerWeek())
+                .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target shifts per employee per week zero (HARD)"));
+    }
+
+    Constraint goalShiftsPerWeekSoftZero(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Employee.class)
+                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+                .join(ConstraintConfiguration.class)
+                .filter((employee, cfg) -> cfg.getTargetShiftsPerWeek() > 0
+                        && cfg.getTargetShiftsPerWeekSeverity() == ConstraintConfiguration.Severity.SOFT)
+                .penalize(HardSoftBigDecimalScore.ONE_SOFT,
+                        (employee, cfg) -> cfg.getTargetShiftsPerWeek())
+                .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target shifts per employee per week zero (SOFT)"));
+    }
+
+    Constraint goalMinutesPerWeekHardZero(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Employee.class)
+                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+                .join(ConstraintConfiguration.class)
+                .filter((employee, cfg) -> cfg.getTargetMinutesPerWeek() > 0
+                        && cfg.getTargetMinutesPerWeekSeverity() == ConstraintConfiguration.Severity.HARD)
+                .penalize(HardSoftBigDecimalScore.ONE_HARD,
+                        (employee, cfg) -> cfg.getTargetMinutesPerWeek())
+                .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target minutes per employee per week zero (HARD)"));
+    }
+
+    Constraint goalMinutesPerWeekSoftZero(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Employee.class)
+                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+                .join(ConstraintConfiguration.class)
+                .filter((employee, cfg) -> cfg.getTargetMinutesPerWeek() > 0
+                        && cfg.getTargetMinutesPerWeekSeverity() == ConstraintConfiguration.Severity.SOFT)
+                .penalize(HardSoftBigDecimalScore.ONE_SOFT,
+                        (employee, cfg) -> cfg.getTargetMinutesPerWeek())
+                .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target minutes per employee per week zero (SOFT)"));
     }
 
 }
