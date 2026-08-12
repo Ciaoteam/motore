@@ -13,6 +13,7 @@ import ai.timefold.solver.core.api.score.stream.test.ConstraintVerifier;
 
 import org.acme.employeescheduling.domain.Employee;
 import org.acme.employeescheduling.domain.EmployeeSchedule;
+import org.acme.employeescheduling.domain.MustWorkTogether;
 import org.acme.employeescheduling.domain.Shift;
 import org.junit.jupiter.api.Test;
 
@@ -221,5 +222,96 @@ class EmployeeSchedulingConstraintProviderTest {
                         new Shift("2", DAY_START_TIME.minusDays(1), DAY_END_TIME, "Location", "Skill", employee2))
                 .penalizesBy(0);
 
+    }
+
+    @Test
+    void minShiftsTogetherPerWeekHard_penalizesShortfall() {
+        Employee amy = new Employee("Amy", null, null, null, null);
+        Employee beth = new Employee("Beth", null, null, null, null);
+
+        // Pair requires at least 3 shared shifts per week (HARD)
+        MustWorkTogether mw = new MustWorkTogether(amy, beth);
+        mw.setMinShiftsTogetherPerWeek(3);
+        mw.setMinShiftsTogetherPerWeekSeverity("HARD");
+
+        // Week of 2021-02-01: Amy and Beth share 2 overlapping shifts → shortfall of 1
+        LocalDateTime mon9 = LocalDate.of(2021, 2, 1).atTime(9, 0);
+        LocalDateTime mon17 = LocalDate.of(2021, 2, 1).atTime(17, 0);
+        LocalDateTime tue9 = LocalDate.of(2021, 2, 2).atTime(9, 0);
+        LocalDateTime tue17 = LocalDate.of(2021, 2, 2).atTime(17, 0);
+
+        Shift amyShift1 = new Shift("a1", mon9, mon17, "Loc", "Skill", amy);
+        Shift amyShift2 = new Shift("a2", tue9, tue17, "Loc", "Skill", amy);
+        Shift bethShift1 = new Shift("b1", mon9, mon17, "Loc", "Skill", beth);
+        Shift bethShift2 = new Shift("b2", tue9, tue17, "Loc", "Skill", beth);
+
+        // 2 shared shifts, need 3 → penalize by 1
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minShiftsTogetherPerWeekHard)
+                .given(amy, beth, mw, amyShift1, amyShift2, bethShift1, bethShift2)
+                .penalizesBy(1);
+    }
+
+    @Test
+    void minShiftsTogetherPerWeekHard_noViolationWhenMetOrExceeded() {
+        Employee amy = new Employee("Amy", null, null, null, null);
+        Employee beth = new Employee("Beth", null, null, null, null);
+
+        MustWorkTogether mw = new MustWorkTogether(amy, beth);
+        mw.setMinShiftsTogetherPerWeek(2);
+        mw.setMinShiftsTogetherPerWeekSeverity("HARD");
+
+        LocalDateTime mon9 = LocalDate.of(2021, 2, 1).atTime(9, 0);
+        LocalDateTime mon17 = LocalDate.of(2021, 2, 1).atTime(17, 0);
+        LocalDateTime tue9 = LocalDate.of(2021, 2, 2).atTime(9, 0);
+        LocalDateTime tue17 = LocalDate.of(2021, 2, 2).atTime(17, 0);
+
+        Shift amyShift1 = new Shift("a1", mon9, mon17, "Loc", "Skill", amy);
+        Shift amyShift2 = new Shift("a2", tue9, tue17, "Loc", "Skill", amy);
+        Shift bethShift1 = new Shift("b1", mon9, mon17, "Loc", "Skill", beth);
+        Shift bethShift2 = new Shift("b2", tue9, tue17, "Loc", "Skill", beth);
+
+        // 2 shared shifts, need 2 → no violation
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minShiftsTogetherPerWeekHard)
+                .given(amy, beth, mw, amyShift1, amyShift2, bethShift1, bethShift2)
+                .penalizes(0);
+    }
+
+    @Test
+    void minShiftsTogetherPerWeekSoft_penalizesShortfall() {
+        Employee amy = new Employee("Amy", null, null, null, null);
+        Employee beth = new Employee("Beth", null, null, null, null);
+
+        MustWorkTogether mw = new MustWorkTogether(amy, beth);
+        mw.setMinShiftsTogetherPerWeek(3);
+        mw.setMinShiftsTogetherPerWeekSeverity("SOFT");
+
+        LocalDateTime mon9 = LocalDate.of(2021, 2, 1).atTime(9, 0);
+        LocalDateTime mon17 = LocalDate.of(2021, 2, 1).atTime(17, 0);
+        Shift amyShift1 = new Shift("a1", mon9, mon17, "Loc", "Skill", amy);
+        Shift bethShift1 = new Shift("b1", mon9, mon17, "Loc", "Skill", beth);
+
+        // 1 shared shift, need 3 → penalize by 2
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minShiftsTogetherPerWeekSoft)
+                .given(amy, beth, mw, amyShift1, bethShift1)
+                .penalizesBy(2);
+    }
+
+    @Test
+    void minShiftsTogetherPerWeekHard_disabledWhenZero() {
+        Employee amy = new Employee("Amy", null, null, null, null);
+        Employee beth = new Employee("Beth", null, null, null, null);
+
+        // minShiftsTogetherPerWeek = 0 → constraint disabled
+        MustWorkTogether mw = new MustWorkTogether(amy, beth);
+        mw.setMinShiftsTogetherPerWeek(0);
+        mw.setMinShiftsTogetherPerWeekSeverity("HARD");
+
+        LocalDateTime mon9 = LocalDate.of(2021, 2, 1).atTime(9, 0);
+        LocalDateTime mon17 = LocalDate.of(2021, 2, 1).atTime(17, 0);
+        Shift amyShift1 = new Shift("a1", mon9, mon17, "Loc", "Skill", amy);
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minShiftsTogetherPerWeekHard)
+                .given(amy, beth, mw, amyShift1)
+                .penalizes(0);
     }
 }

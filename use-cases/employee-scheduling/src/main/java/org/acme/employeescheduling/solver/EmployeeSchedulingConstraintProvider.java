@@ -48,6 +48,8 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 unavailableEmployee(constraintFactory),
                 mustWorkTogetherHard(constraintFactory),
                 mustWorkTogetherSoft(constraintFactory),
+                minShiftsTogetherPerWeekHard(constraintFactory),
+                minShiftsTogetherPerWeekSoft(constraintFactory),
                 maxWeeklyHoursHard(constraintFactory),
                 maxWeeklyHoursSoft(constraintFactory),
                 maxMonthlyHoursHard(constraintFactory),
@@ -183,6 +185,48 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                                     Shift::getStart, Shift::getEnd))
                 .penalize(HardSoftBigDecimalScore.ONE_SOFT)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Must work together - partner missing (A assigned - B missing) (SOFT)"));
+    }
+
+    // Min overlapping shifts together per week - shortfall (HARD)
+    Constraint minShiftsTogetherPerWeekHard(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Shift.class)
+                .join(MustWorkTogether.class,
+                        equal(Shift::getEmployee, MustWorkTogether::getEmployeeA))
+                .filter((shiftA, mw) -> mw.getMinShiftsTogetherPerWeek() > 0
+                        && "HARD".equalsIgnoreCase(mw.getMinShiftsTogetherPerWeekSeverity()))
+                .join(Shift.class,
+                        equal((shiftA, mw) -> mw.getEmployeeB(), Shift::getEmployee),
+                        overlapping((shiftA, mw) -> shiftA.getStart(), (shiftA, mw) -> shiftA.getEnd(),
+                                Shift::getStart, Shift::getEnd))
+                .groupBy(
+                        (shiftA, mw, shiftB) -> mw,
+                        (shiftA, mw, shiftB) -> shiftA.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        ConstraintCollectors.countTri())
+                .filter((mw, week, count) -> count < mw.getMinShiftsTogetherPerWeek())
+                .penalize(HardSoftBigDecimalScore.ONE_HARD,
+                        (mw, week, count) -> mw.getMinShiftsTogetherPerWeek() - count)
+                .asConstraint(ConstraintIdSanitizer.sanitize("Min shifts together per week - shortfall (HARD)"));
+    }
+
+    // Min overlapping shifts together per week - shortfall (SOFT)
+    Constraint minShiftsTogetherPerWeekSoft(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Shift.class)
+                .join(MustWorkTogether.class,
+                        equal(Shift::getEmployee, MustWorkTogether::getEmployeeA))
+                .filter((shiftA, mw) -> mw.getMinShiftsTogetherPerWeek() > 0
+                        && !"HARD".equalsIgnoreCase(mw.getMinShiftsTogetherPerWeekSeverity()))
+                .join(Shift.class,
+                        equal((shiftA, mw) -> mw.getEmployeeB(), Shift::getEmployee),
+                        overlapping((shiftA, mw) -> shiftA.getStart(), (shiftA, mw) -> shiftA.getEnd(),
+                                Shift::getStart, Shift::getEnd))
+                .groupBy(
+                        (shiftA, mw, shiftB) -> mw,
+                        (shiftA, mw, shiftB) -> shiftA.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        ConstraintCollectors.countTri())
+                .filter((mw, week, count) -> count < mw.getMinShiftsTogetherPerWeek())
+                .penalize(HardSoftBigDecimalScore.ONE_SOFT,
+                        (mw, week, count) -> mw.getMinShiftsTogetherPerWeek() - count)
+                .asConstraint(ConstraintIdSanitizer.sanitize("Min shifts together per week - shortfall (SOFT)"));
     }
 
     Constraint maxWeeklyHoursHard(ConstraintFactory constraintFactory) {

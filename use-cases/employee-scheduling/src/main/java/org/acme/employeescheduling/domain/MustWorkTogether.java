@@ -7,11 +7,25 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
  * Problem fact: when employeeA works a shift, employeeB must also work that same shift.
+ * Optionally, a minimum number of overlapping shifts per week can be required via
+ * {@code minShiftsTogetherPerWeek} (0 = disabled) and {@code minShiftsTogetherPerWeekSeverity}
+ * ("HARD" or "SOFT", defaults to "SOFT").
  */
 public class MustWorkTogether {
 
     private Employee employeeA;
     private Employee employeeB;
+
+    /**
+     * Minimum number of shifts that A and B must share (overlap) in the same ISO week.
+     * 0 disables this goal. Configure severity via {@code minShiftsTogetherPerWeekSeverity}.
+     */
+    private int minShiftsTogetherPerWeek = 0;
+
+    /**
+     * Severity for the minimum-shifts-together-per-week goal: "HARD" or "SOFT" (default).
+     */
+    private String minShiftsTogetherPerWeekSeverity = "SOFT";
 
     public MustWorkTogether() {
         // No-arg constructor for JSON deserialization
@@ -38,6 +52,22 @@ public class MustWorkTogether {
 
     public void setEmployeeB(Employee employeeB) {
         this.employeeB = employeeB;
+    }
+
+    public int getMinShiftsTogetherPerWeek() {
+        return minShiftsTogetherPerWeek;
+    }
+
+    public void setMinShiftsTogetherPerWeek(int minShiftsTogetherPerWeek) {
+        this.minShiftsTogetherPerWeek = minShiftsTogetherPerWeek;
+    }
+
+    public String getMinShiftsTogetherPerWeekSeverity() {
+        return minShiftsTogetherPerWeekSeverity;
+    }
+
+    public void setMinShiftsTogetherPerWeekSeverity(String minShiftsTogetherPerWeekSeverity) {
+        this.minShiftsTogetherPerWeekSeverity = minShiftsTogetherPerWeekSeverity;
     }
 
     @Override
