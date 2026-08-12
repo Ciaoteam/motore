@@ -18,6 +18,9 @@ public class Employee {
     private Integer minWeeklyMinutes;
     private String minWeeklySeverity; // "SOFT" or "HARD", defaults to "SOFT"
 
+    private Integer targetShiftsPerWeek;
+    private String targetShiftsPerWeekSeverity; // "NONE", "SOFT", or "HARD"
+
     public Employee() {
 
     }
@@ -85,6 +88,22 @@ public class Employee {
 
     public void setMinWeeklySeverity(String minWeeklySeverity) {
         this.minWeeklySeverity = minWeeklySeverity;
+    }
+
+    public Integer getTargetShiftsPerWeek() {
+        return targetShiftsPerWeek;
+    }
+
+    public void setTargetShiftsPerWeek(Integer targetShiftsPerWeek) {
+        this.targetShiftsPerWeek = targetShiftsPerWeek;
+    }
+
+    public String getTargetShiftsPerWeekSeverity() {
+        return targetShiftsPerWeekSeverity;
+    }
+
+    public void setTargetShiftsPerWeekSeverity(String targetShiftsPerWeekSeverity) {
+        this.targetShiftsPerWeekSeverity = targetShiftsPerWeekSeverity;
     }
 
     @Override
