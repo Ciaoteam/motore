@@ -10,10 +10,13 @@ public class EmployeeScheduleSolverExceptionMapper implements ExceptionMapper<Em
 
     @Override
     public Response toResponse(EmployeeScheduleSolverException exception) {
+        ErrorInfo errorInfo = exception.getJobId() == null
+                ? new ErrorInfo(exception.getMessage())
+                : new ErrorInfo(exception.getJobId(), exception.getMessage());
         return Response
                 .status(exception.getStatus())
                 .type(MediaType.APPLICATION_JSON)
-                .entity(new ErrorInfo(exception.getJobId(), exception.getMessage()))
+                .entity(errorInfo)
                 .build();
     }
 }
