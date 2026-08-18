@@ -12,6 +12,7 @@ import ai.timefold.solver.core.api.score.HardSoftScore;
 import ai.timefold.solver.core.api.score.analysis.ScoreAnalysis;
 import ai.timefold.solver.core.api.solver.ScoreAnalysisFetchPolicy;
 import ai.timefold.solver.core.api.solver.SolutionManager;
+import ai.timefold.solver.core.api.solver.SolutionUpdatePolicy;
 import ai.timefold.solver.core.api.solver.SolverManager;
 import ai.timefold.solver.core.api.solver.SolverStatus;
 import jakarta.inject.Inject;
@@ -19,7 +20,6 @@ import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
-import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -102,19 +102,47 @@ public class ProjectJobSchedulingResource {
         return jobId;
     }
 
-    @Operation(summary = "Submit a schedule to analyze its score.")
+    @Operation(summary = "Get score analysis for a completed solve job.")
     @APIResponses(value = {
-            @APIResponse(responseCode = "202",
-                    description = "Resulting score analysis, optionally without constraint matches.",
+            @APIResponse(responseCode = "200",
+                    description = "Resulting score analysis for the completed schedule.",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON,
-                            schema = @Schema(implementation = ScoreAnalysis.class))) })
-    @PUT
-    @Consumes({ MediaType.APPLICATION_JSON })
+                            schema = @Schema(implementation = ScoreAnalysis.class))),
+            @APIResponse(responseCode = "404", description = "No schedule found.",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON,
+                            schema = @Schema(implementation = ErrorInfo.class))),
+            @APIResponse(responseCode = "409", description = "Schedule is still solving.",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON,
+                            schema = @Schema(implementation = ErrorInfo.class))),
+            @APIResponse(responseCode = "500", description = "Unexpected server error during score analysis.",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON,
+                            schema = @Schema(implementation = ErrorInfo.class)))
+    })
+    @GET
     @Produces(MediaType.APPLICATION_JSON)
-    @Path("analyze")
-    public ScoreAnalysis<HardSoftScore> analyze(ProjectJobSchedule problem,
+    @Path("{jobId}/analysis")
+    public ScoreAnalysis<HardSoftScore> getAnalysis(
+            @Parameter(description = "The job ID returned by the POST method.") @PathParam("jobId") String jobId,
             @QueryParam("fetchPolicy") ScoreAnalysisFetchPolicy fetchPolicy) {
-        return fetchPolicy == null ? solutionManager.analyze(problem) : solutionManager.analyze(problem, fetchPolicy);
+        Job job = jobIdToJob.get(jobId);
+        if (job == null) {
+            throw new ScheduleSolverException(jobId, Response.Status.NOT_FOUND, "No schedule found.");
+        }
+        SolverStatus solverStatus = solverManager.getSolverStatus(jobId);
+        if (solverStatus != SolverStatus.NOT_SOLVING) {
+            throw new ScheduleSolverException(jobId, Response.Status.CONFLICT,
+                    "Schedule solving has not completed yet. Try again once solverStatus is NOT_SOLVING.");
+        }
+        if (job.exception != null) {
+            throw new ScheduleSolverException(jobId, job.exception);
+        }
+        ProjectJobSchedule schedule = job.schedule;
+        if (schedule == null) {
+            throw new ScheduleSolverException(jobId, Response.Status.INTERNAL_SERVER_ERROR,
+                    "No schedule available for score analysis.");
+        }
+        ScoreAnalysisFetchPolicy policy = fetchPolicy != null ? fetchPolicy : ScoreAnalysisFetchPolicy.FETCH_ALL;
+        return solutionManager.analyze(schedule, policy, SolutionUpdatePolicy.UPDATE_ALL);
     }
 
     @Operation(
