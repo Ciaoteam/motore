@@ -80,27 +80,26 @@ class ProjectJobSchedulingResourceTest {
                                 .jsonPath().get("solverStatus")));
 
         ProjectJobSchedule solution = get("/schedules/" + jobId).then().extract().as(ProjectJobSchedule.class);
+        assertThat(solution.getScore()).isNotNull();
 
         String analysis = given()
-                .contentType(ContentType.JSON)
-                .body(solution)
                 .expect().contentType(ContentType.JSON)
                 .when()
-                .put("/schedules/analyze")
+                .get("/schedules/" + jobId + "/analysis")
                 .then()
+                .statusCode(200)
                 .extract()
                 .asString();
         // There are too many constraints to validate
         assertThat(analysis).isNotNull();
 
         String analysis2 = given()
-                .contentType(ContentType.JSON)
                 .queryParam("fetchPolicy", "FETCH_SHALLOW")
-                .body(solution)
                 .expect().contentType(ContentType.JSON)
                 .when()
-                .put("/schedules/analyze")
+                .get("/schedules/" + jobId + "/analysis")
                 .then()
+                .statusCode(200)
                 .extract()
                 .asString();
         // There are too many constraints to validate
