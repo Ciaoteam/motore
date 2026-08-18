@@ -7,6 +7,8 @@ import ai.timefold.solver.core.api.solver.SolutionManager;
 import ai.timefold.solver.core.api.solver.SolutionUpdatePolicy;
 import ai.timefold.solver.core.api.solver.SolverManager;
 import ai.timefold.solver.core.api.solver.SolverStatus;
+import ai.timefold.solver.core.enterprise.TimefoldSolverEnterpriseService.EnterpriseLicenseException;
+import ai.timefold.solver.core.enterprise.TimefoldSolverEnterpriseService.EnterpriseProductException;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -104,8 +106,7 @@ public class EmployeeScheduleResource {
     @Path("analyze")
     public ScoreAnalysis<HardSoftBigDecimalScore> analyze(EmployeeSchedule problem,
             @QueryParam("fetchPolicy") ScoreAnalysisFetchPolicy fetchPolicy) {
-        ScoreAnalysisFetchPolicy policy = fetchPolicy != null ? fetchPolicy : ScoreAnalysisFetchPolicy.FETCH_ALL;
-        return solutionManager.analyze(problem, policy, SolutionUpdatePolicy.UPDATE_ALL);
+        return analyzeSchedule(null, problem, fetchPolicy);
     }
 
     @Operation(summary = "Get score analysis for a completed solve job.")
@@ -147,8 +148,32 @@ public class EmployeeScheduleResource {
             throw new EmployeeScheduleSolverException(jobId, Response.Status.INTERNAL_SERVER_ERROR,
                     "No schedule available for score analysis.");
         }
+        return analyzeSchedule(jobId, schedule, fetchPolicy);
+    }
+
+    private ScoreAnalysis<HardSoftBigDecimalScore> analyzeSchedule(String jobId, EmployeeSchedule schedule,
+            ScoreAnalysisFetchPolicy fetchPolicy) {
         ScoreAnalysisFetchPolicy policy = fetchPolicy != null ? fetchPolicy : ScoreAnalysisFetchPolicy.FETCH_ALL;
-        return solutionManager.analyze(schedule, policy, SolutionUpdatePolicy.UPDATE_ALL);
+        try {
+            return solutionManager.analyze(schedule, policy, SolutionUpdatePolicy.UPDATE_ALL);
+        } catch (RuntimeException exception) {
+            if (isUnavailableScoreAnalysis(exception)) {
+                throw new EmployeeScheduleSolverException(jobId, Response.Status.INTERNAL_SERVER_ERROR,
+                        "Score analysis requires Timefold Solver Enterprise Edition with a valid license.");
+            }
+            throw exception;
+        }
+    }
+
+    private static boolean isUnavailableScoreAnalysis(RuntimeException exception) {
+        Throwable cause = exception;
+        while (cause != null) {
+            if (cause instanceof EnterpriseLicenseException || cause instanceof EnterpriseProductException) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     @Operation(
