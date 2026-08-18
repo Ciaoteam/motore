@@ -104,8 +104,7 @@ public class EmployeeScheduleResource {
     @Path("analyze")
     public ScoreAnalysis<HardSoftBigDecimalScore> analyze(EmployeeSchedule problem,
             @QueryParam("fetchPolicy") ScoreAnalysisFetchPolicy fetchPolicy) {
-        ScoreAnalysisFetchPolicy policy = fetchPolicy != null ? fetchPolicy : ScoreAnalysisFetchPolicy.FETCH_ALL;
-        return solutionManager.analyze(problem, policy, SolutionUpdatePolicy.UPDATE_ALL);
+        return analyzeSchedule(null, problem, fetchPolicy);
     }
 
     @Operation(summary = "Get score analysis for a completed solve job.")
@@ -147,8 +146,28 @@ public class EmployeeScheduleResource {
             throw new EmployeeScheduleSolverException(jobId, Response.Status.INTERNAL_SERVER_ERROR,
                     "No schedule available for score analysis.");
         }
+        return analyzeSchedule(jobId, schedule, fetchPolicy);
+    }
+
+    private ScoreAnalysis<HardSoftBigDecimalScore> analyzeSchedule(String jobId, EmployeeSchedule schedule,
+            ScoreAnalysisFetchPolicy fetchPolicy) {
         ScoreAnalysisFetchPolicy policy = fetchPolicy != null ? fetchPolicy : ScoreAnalysisFetchPolicy.FETCH_ALL;
-        return solutionManager.analyze(schedule, policy, SolutionUpdatePolicy.UPDATE_ALL);
+        try {
+            return solutionManager.analyze(schedule, policy, SolutionUpdatePolicy.UPDATE_ALL);
+        } catch (IllegalStateException exception) {
+            if (isUnavailableScoreAnalysis(exception)) {
+                throw new EmployeeScheduleSolverException(jobId, Response.Status.INTERNAL_SERVER_ERROR,
+                        "Score analysis requires Timefold Solver Enterprise Edition with a valid license.");
+            }
+            throw exception;
+        }
+    }
+
+    private static boolean isUnavailableScoreAnalysis(IllegalStateException exception) {
+        String message = exception.getMessage();
+        return message != null
+                && (message.contains("commercial feature \"Score analysis\"")
+                        || message.contains("Timefold License"));
     }
 
     @Operation(

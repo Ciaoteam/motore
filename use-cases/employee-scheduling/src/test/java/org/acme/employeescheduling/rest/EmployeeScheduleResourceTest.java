@@ -4,11 +4,14 @@ import static io.restassured.RestAssured.get;
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 
 import ai.timefold.solver.core.api.solver.SolverStatus;
@@ -17,7 +20,6 @@ import org.acme.employeescheduling.domain.EmployeeSchedule;
 import org.acme.employeescheduling.domain.Shift;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
@@ -64,9 +66,10 @@ class EmployeeScheduleResourceTest {
         assertTrue(solution.getScore().isFeasible());
     }
 
-    @EnabledIfSystemProperty(named = "enterprise", matches = ".*")
     @Test
-    void analyzeCompletedSchedule() {
+    void analyzeCompletedScheduleWithoutLicenseReturnsActionableError() {
+        assumeFalse(isTimefoldLicenseConfigured(), "This test covers the unlicensed score-analysis path.");
+
         EmployeeSchedule testSchedule = given()
                 .when().get("/demo-data/SMALL")
                 .then()
@@ -94,25 +97,41 @@ class EmployeeScheduleResourceTest {
         EmployeeSchedule solution = get("/schedules/" + jobId).then().extract().as(EmployeeSchedule.class);
         assertThat(solution.getScore()).isNotNull();
 
-        String analysis = given()
-                .expect().contentType(ContentType.JSON)
+        String analysisError = given()
+                .accept(ContentType.JSON)
                 .when()
                 .get("/schedules/" + jobId + "/analysis")
                 .then()
-                .statusCode(200)
+                .statusCode(500)
                 .extract()
                 .asString();
-        assertThat(analysis).isNotNull();
+        assertThat(analysisError)
+                .contains("Score analysis requires Timefold Solver Enterprise Edition with a valid license.");
 
-        String shallowAnalysis = given()
+        String shallowAnalysisError = given()
                 .queryParam("fetchPolicy", "FETCH_SHALLOW")
-                .expect().contentType(ContentType.JSON)
+                .accept(ContentType.JSON)
                 .when()
                 .get("/schedules/" + jobId + "/analysis")
                 .then()
-                .statusCode(200)
+                .statusCode(500)
                 .extract()
                 .asString();
-        assertThat(shallowAnalysis).isNotNull();
+        assertThat(shallowAnalysisError)
+                .contains("Score analysis requires Timefold Solver Enterprise Edition with a valid license.");
+    }
+
+    private static boolean isTimefoldLicenseConfigured() {
+        if (hasValue(System.getenv("TIMEFOLD_LICENSE")) || hasValue(System.getenv("TIMEFOLD_LICENSE_PATH"))) {
+            return true;
+        }
+        if (Files.exists(Path.of(System.getProperty("user.home"), "timefold-license.pem"))) {
+            return true;
+        }
+        return Thread.currentThread().getContextClassLoader().getResource("timefold-license.pem") != null;
+    }
+
+    private static boolean hasValue(String value) {
+        return value != null && !value.isBlank();
     }
 }
