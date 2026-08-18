@@ -156,7 +156,7 @@ public class EmployeeScheduleResource {
         ScoreAnalysisFetchPolicy policy = fetchPolicy != null ? fetchPolicy : ScoreAnalysisFetchPolicy.FETCH_ALL;
         try {
             return solutionManager.analyze(schedule, policy, SolutionUpdatePolicy.UPDATE_ALL);
-        } catch (IllegalStateException exception) {
+        } catch (RuntimeException exception) {
             if (isUnavailableScoreAnalysis(exception)) {
                 throw new EmployeeScheduleSolverException(jobId, Response.Status.INTERNAL_SERVER_ERROR,
                         "Score analysis requires Timefold Solver Enterprise Edition with a valid license.");
@@ -165,7 +165,7 @@ public class EmployeeScheduleResource {
         }
     }
 
-    private static boolean isUnavailableScoreAnalysis(IllegalStateException exception) {
+    private static boolean isUnavailableScoreAnalysis(RuntimeException exception) {
         Throwable cause = exception;
         while (cause != null) {
             if (cause instanceof EnterpriseLicenseException || cause instanceof EnterpriseProductException) {
