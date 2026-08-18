@@ -7,6 +7,8 @@ import ai.timefold.solver.core.api.solver.SolutionManager;
 import ai.timefold.solver.core.api.solver.SolutionUpdatePolicy;
 import ai.timefold.solver.core.api.solver.SolverManager;
 import ai.timefold.solver.core.api.solver.SolverStatus;
+import ai.timefold.solver.core.enterprise.TimefoldSolverEnterpriseService.EnterpriseLicenseException;
+import ai.timefold.solver.core.enterprise.TimefoldSolverEnterpriseService.EnterpriseProductException;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -164,10 +166,14 @@ public class EmployeeScheduleResource {
     }
 
     private static boolean isUnavailableScoreAnalysis(IllegalStateException exception) {
-        String message = exception.getMessage();
-        return message != null
-                && (message.contains("commercial feature \"Score analysis\"")
-                        || message.contains("Timefold License"));
+        Throwable cause = exception;
+        while (cause != null) {
+            if (cause instanceof EnterpriseLicenseException || cause instanceof EnterpriseProductException) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     @Operation(
