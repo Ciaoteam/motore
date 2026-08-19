@@ -22,6 +22,7 @@ import org.acme.employeescheduling.domain.Employee;
 import org.acme.employeescheduling.domain.Shift;
 import org.acme.employeescheduling.domain.MustWorkTogether;
 import org.acme.employeescheduling.domain.ConstraintConfiguration;
+import org.acme.employeescheduling.domain.ConcurrentSkillRequirement;
 
 public class EmployeeSchedulingConstraintProvider implements ConstraintProvider {
 
@@ -78,7 +79,12 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 goalShiftsPerWeekPerEmployeeHard(constraintFactory),
                 goalShiftsPerWeekPerEmployeeHardZero(constraintFactory),
                 goalShiftsPerWeekPerEmployeeSoft(constraintFactory),
-                goalShiftsPerWeekPerEmployeeSoftZero(constraintFactory)
+                goalShiftsPerWeekPerEmployeeSoftZero(constraintFactory),
+                // Concurrent skill headcount
+                minConcurrentSkillHard(constraintFactory),
+                minConcurrentSkillSoft(constraintFactory),
+                maxConcurrentSkillHard(constraintFactory),
+                maxConcurrentSkillSoft(constraintFactory)
         };
     }
 
@@ -533,6 +539,70 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 .penalize(HardSoftBigDecimalScore.ONE_SOFT,
                         (employee, cfg) -> cfg.getTargetMinutesPerWeek())
                 .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target minutes per employee per week zero (SOFT)"));
+    }
+
+    // Min concurrent employees with a given skill (HARD)
+    Constraint minConcurrentSkillHard(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(ConcurrentSkillRequirement.class)
+                .filter(req -> req.getMinCount() > 0 && "HARD".equalsIgnoreCase(req.getSeverity()))
+                .join(Shift.class,
+                        overlapping(ConcurrentSkillRequirement::getWindowStart, ConcurrentSkillRequirement::getWindowEnd,
+                                Shift::getStart, Shift::getEnd))
+                .filter((req, shift) -> shift.getEmployee() != null
+                        && shift.getEmployee().getSkills().contains(req.getSkill()))
+                .groupBy((req, shift) -> req, ConstraintCollectors.countBi())
+                .filter((req, count) -> count < req.getMinCount())
+                .penalize(HardSoftBigDecimalScore.ONE_HARD,
+                        (req, count) -> req.getMinCount() - count)
+                .asConstraint(ConstraintIdSanitizer.sanitize("Min concurrent skill (HARD)"));
+    }
+
+    // Min concurrent employees with a given skill (SOFT)
+    Constraint minConcurrentSkillSoft(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(ConcurrentSkillRequirement.class)
+                .filter(req -> req.getMinCount() > 0 && !"HARD".equalsIgnoreCase(req.getSeverity()))
+                .join(Shift.class,
+                        overlapping(ConcurrentSkillRequirement::getWindowStart, ConcurrentSkillRequirement::getWindowEnd,
+                                Shift::getStart, Shift::getEnd))
+                .filter((req, shift) -> shift.getEmployee() != null
+                        && shift.getEmployee().getSkills().contains(req.getSkill()))
+                .groupBy((req, shift) -> req, ConstraintCollectors.countBi())
+                .filter((req, count) -> count < req.getMinCount())
+                .penalize(HardSoftBigDecimalScore.ONE_SOFT,
+                        (req, count) -> req.getMinCount() - count)
+                .asConstraint(ConstraintIdSanitizer.sanitize("Min concurrent skill (SOFT)"));
+    }
+
+    // Max concurrent employees with a given skill (HARD)
+    Constraint maxConcurrentSkillHard(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(ConcurrentSkillRequirement.class)
+                .filter(req -> req.getMaxCount() >= 0 && "HARD".equalsIgnoreCase(req.getSeverity()))
+                .join(Shift.class,
+                        overlapping(ConcurrentSkillRequirement::getWindowStart, ConcurrentSkillRequirement::getWindowEnd,
+                                Shift::getStart, Shift::getEnd))
+                .filter((req, shift) -> shift.getEmployee() != null
+                        && shift.getEmployee().getSkills().contains(req.getSkill()))
+                .groupBy((req, shift) -> req, ConstraintCollectors.countBi())
+                .filter((req, count) -> count > req.getMaxCount())
+                .penalize(HardSoftBigDecimalScore.ONE_HARD,
+                        (req, count) -> count - req.getMaxCount())
+                .asConstraint(ConstraintIdSanitizer.sanitize("Max concurrent skill (HARD)"));
+    }
+
+    // Max concurrent employees with a given skill (SOFT)
+    Constraint maxConcurrentSkillSoft(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(ConcurrentSkillRequirement.class)
+                .filter(req -> req.getMaxCount() >= 0 && !"HARD".equalsIgnoreCase(req.getSeverity()))
+                .join(Shift.class,
+                        overlapping(ConcurrentSkillRequirement::getWindowStart, ConcurrentSkillRequirement::getWindowEnd,
+                                Shift::getStart, Shift::getEnd))
+                .filter((req, shift) -> shift.getEmployee() != null
+                        && shift.getEmployee().getSkills().contains(req.getSkill()))
+                .groupBy((req, shift) -> req, ConstraintCollectors.countBi())
+                .filter((req, count) -> count > req.getMaxCount())
+                .penalize(HardSoftBigDecimalScore.ONE_SOFT,
+                        (req, count) -> count - req.getMaxCount())
+                .asConstraint(ConstraintIdSanitizer.sanitize("Max concurrent skill (SOFT)"));
     }
 
 }

@@ -25,6 +25,9 @@ public class EmployeeSchedule {
     @ProblemFactCollectionProperty
     private List<MustWorkTogether> mustWorkTogetherList = new ArrayList<>();
 
+    @ProblemFactCollectionProperty
+    private List<ConcurrentSkillRequirement> concurrentSkillRequirements = new ArrayList<>();
+
     @ProblemFactProperty
     private ConstraintConfiguration constraintConfiguration = new ConstraintConfiguration();
 
@@ -68,6 +71,14 @@ public class EmployeeSchedule {
 
     public void setMustWorkTogetherList(List<MustWorkTogether> mustWorkTogetherList) {
         this.mustWorkTogetherList = mustWorkTogetherList;
+    }
+
+    public List<ConcurrentSkillRequirement> getConcurrentSkillRequirements() {
+        return concurrentSkillRequirements;
+    }
+
+    public void setConcurrentSkillRequirements(List<ConcurrentSkillRequirement> concurrentSkillRequirements) {
+        this.concurrentSkillRequirements = concurrentSkillRequirements;
     }
 
     public ConstraintConfiguration getConstraintConfiguration() {
