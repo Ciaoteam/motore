@@ -9,7 +9,7 @@ import ai.timefold.solver.core.api.domain.solution.PlanningSolution;
 import ai.timefold.solver.core.api.domain.solution.ProblemFactCollectionProperty;
 import ai.timefold.solver.core.api.domain.solution.ProblemFactProperty;
 import ai.timefold.solver.core.api.domain.valuerange.ValueRangeProvider;
-import ai.timefold.solver.core.api.score.HardSoftBigDecimalScore;
+import ai.timefold.solver.core.api.score.HardMediumSoftBigDecimalScore;
 import ai.timefold.solver.core.api.solver.SolverStatus;
 
 @PlanningSolution
@@ -25,11 +25,14 @@ public class EmployeeSchedule {
     @ProblemFactCollectionProperty
     private List<MustWorkTogether> mustWorkTogetherList = new ArrayList<>();
 
+    @ProblemFactCollectionProperty
+    private List<ConcurrentSkillRequirement> concurrentSkillRequirements = new ArrayList<>();
+
     @ProblemFactProperty
     private ConstraintConfiguration constraintConfiguration = new ConstraintConfiguration();
 
     @PlanningScore
-    private HardSoftBigDecimalScore score;
+    private HardMediumSoftBigDecimalScore score;
 
     private SolverStatus solverStatus;
 
@@ -41,7 +44,7 @@ public class EmployeeSchedule {
         this.shifts = shifts;
     }
 
-    public EmployeeSchedule(HardSoftBigDecimalScore score, SolverStatus solverStatus) {
+    public EmployeeSchedule(HardMediumSoftBigDecimalScore score, SolverStatus solverStatus) {
         this.score = score;
         this.solverStatus = solverStatus;
     }
@@ -70,6 +73,14 @@ public class EmployeeSchedule {
         this.mustWorkTogetherList = mustWorkTogetherList;
     }
 
+    public List<ConcurrentSkillRequirement> getConcurrentSkillRequirements() {
+        return concurrentSkillRequirements;
+    }
+
+    public void setConcurrentSkillRequirements(List<ConcurrentSkillRequirement> concurrentSkillRequirements) {
+        this.concurrentSkillRequirements = concurrentSkillRequirements;
+    }
+
     public ConstraintConfiguration getConstraintConfiguration() {
         return constraintConfiguration;
     }
@@ -78,11 +89,11 @@ public class EmployeeSchedule {
         this.constraintConfiguration = constraintConfiguration;
     }
 
-    public HardSoftBigDecimalScore getScore() {
+    public HardMediumSoftBigDecimalScore getScore() {
         return score;
     }
 
-    public void setScore(HardSoftBigDecimalScore score) {
+    public void setScore(HardMediumSoftBigDecimalScore score) {
         this.score = score;
     }
 
