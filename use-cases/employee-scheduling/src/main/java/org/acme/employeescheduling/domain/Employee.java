@@ -16,10 +16,10 @@ public class Employee {
     private Set<LocalDate> desiredDates;
 
     private Integer minWeeklyMinutes;
-    private String minWeeklySeverity; // "SOFT" or "HARD", defaults to "SOFT"
+    private String minWeeklySeverity; // "SOFT", "MEDIUM", or "HARD", defaults to "SOFT"
 
     private Integer targetShiftsPerWeek;
-    private String targetShiftsPerWeekSeverity; // "NONE", "SOFT", or "HARD"
+    private String targetShiftsPerWeekSeverity; // "NONE", "SOFT", "MEDIUM", or "HARD"
 
     public Employee() {
 

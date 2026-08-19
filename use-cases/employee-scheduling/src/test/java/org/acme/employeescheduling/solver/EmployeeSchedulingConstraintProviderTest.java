@@ -11,6 +11,8 @@ import jakarta.inject.Inject;
 
 import ai.timefold.solver.core.api.score.stream.test.ConstraintVerifier;
 
+import org.acme.employeescheduling.domain.ConcurrentSkillRequirement;
+import org.acme.employeescheduling.domain.ConstraintConfiguration;
 import org.acme.employeescheduling.domain.Employee;
 import org.acme.employeescheduling.domain.EmployeeSchedule;
 import org.acme.employeescheduling.domain.MustWorkTogether;
@@ -294,6 +296,75 @@ class EmployeeSchedulingConstraintProviderTest {
         constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minShiftsTogetherPerWeekSoft)
                 .given(amy, beth, mw, amyShift1, bethShift1)
                 .penalizesBy(2);
+    }
+
+    @Test
+    void mustWorkTogetherMedium_penalizesMissingPartner() {
+        Employee amy = new Employee("Amy", Set.of("Skill"), null, null, null);
+        Employee beth = new Employee("Beth", Set.of("Skill"), null, null, null);
+        MustWorkTogether mustWorkTogether = new MustWorkTogether(amy, beth);
+        ConstraintConfiguration configuration = new ConstraintConfiguration();
+        configuration.setMustWorkTogetherSeverity(ConstraintConfiguration.Severity.MEDIUM);
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::mustWorkTogetherMedium)
+                .given(amy, beth, mustWorkTogether, configuration,
+                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", amy))
+                .penalizesBy(1);
+    }
+
+    @Test
+    void minShiftsTogetherPerWeekMedium_penalizesShortfall() {
+        Employee amy = new Employee("Amy", null, null, null, null);
+        Employee beth = new Employee("Beth", null, null, null, null);
+
+        MustWorkTogether mw = new MustWorkTogether(amy, beth);
+        mw.setMinShiftsTogetherPerWeek(3);
+        mw.setMinShiftsTogetherPerWeekSeverity("MEDIUM");
+
+        LocalDateTime mon9 = LocalDate.of(2021, 2, 1).atTime(9, 0);
+        LocalDateTime mon17 = LocalDate.of(2021, 2, 1).atTime(17, 0);
+        Shift amyShift1 = new Shift("a1", mon9, mon17, "Loc", "Skill", amy);
+        Shift bethShift1 = new Shift("b1", mon9, mon17, "Loc", "Skill", beth);
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minShiftsTogetherPerWeekMedium)
+                .given(amy, beth, mw, amyShift1, bethShift1)
+                .penalizesBy(2);
+    }
+
+    @Test
+    void maxWeeklyHoursMedium_penalizesOverflow() {
+        Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
+        ConstraintConfiguration configuration = new ConstraintConfiguration();
+        configuration.setMaxWeeklyMinutes(60);
+        configuration.setMaxWeeklySeverity(ConstraintConfiguration.Severity.MEDIUM);
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::maxWeeklyHoursMedium)
+                .given(employee, configuration,
+                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee))
+                .penalizesBy((int) Duration.ofHours(7).toMinutes());
+    }
+
+    @Test
+    void goalShiftsPerWeekPerEmployeeMedium_penalizesDeviation() {
+        Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
+        employee.setTargetShiftsPerWeek(2);
+        employee.setTargetShiftsPerWeekSeverity("MEDIUM");
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftsPerWeekPerEmployeeMedium)
+                .given(employee, new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee))
+                .penalizesBy(1);
+    }
+
+    @Test
+    void minConcurrentSkillMedium_penalizesShortfall() {
+        Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
+        ConcurrentSkillRequirement requirement = new ConcurrentSkillRequirement(
+                "req-1", "Skill", DAY_START_TIME, DAY_END_TIME, 2, -1, "MEDIUM");
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minConcurrentSkillMedium)
+                .given(employee, requirement,
+                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee))
+                .penalizesBy(1);
     }
 
     @Test

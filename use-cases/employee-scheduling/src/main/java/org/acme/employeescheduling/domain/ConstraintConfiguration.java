@@ -5,7 +5,7 @@ package org.acme.employeescheduling.domain;
  */
 public class ConstraintConfiguration {
 
-    public enum Severity { NONE, SOFT, HARD }
+    public enum Severity { NONE, SOFT, MEDIUM, HARD }
 
     private Severity mustWorkTogetherSeverity = Severity.HARD;
     private Severity maxWeeklySeverity = Severity.HARD;
@@ -22,12 +22,12 @@ public class ConstraintConfiguration {
     private int targetMinutesPerWeek = 0;
 
     /**
-     * Severity for the target shifts per week goal: NONE, SOFT, or HARD.
+     * Severity for the target shifts per week goal: NONE, SOFT, MEDIUM, or HARD.
      */
     private Severity targetShiftsPerWeekSeverity = Severity.SOFT;
 
     /**
-     * Severity for the target minutes per week goal: NONE, SOFT, or HARD.
+     * Severity for the target minutes per week goal: NONE, SOFT, MEDIUM, or HARD.
      */
     private Severity targetMinutesPerWeekSeverity = Severity.SOFT;
 

@@ -1,7 +1,7 @@
 package org.acme.employeescheduling.rest;
 
 import ai.timefold.solver.core.api.score.analysis.ScoreAnalysis;
-import ai.timefold.solver.core.api.score.HardSoftBigDecimalScore;
+import ai.timefold.solver.core.api.score.HardMediumSoftBigDecimalScore;
 import ai.timefold.solver.core.api.solver.ScoreAnalysisFetchPolicy;
 import ai.timefold.solver.core.api.solver.SolutionManager;
 import ai.timefold.solver.core.api.solver.SolutionUpdatePolicy;
@@ -48,14 +48,14 @@ public class EmployeeScheduleResource {
     private static final Logger LOGGER = LoggerFactory.getLogger(EmployeeScheduleResource.class);
 
     SolverManager<EmployeeSchedule> solverManager;
-    SolutionManager<EmployeeSchedule, HardSoftBigDecimalScore> solutionManager;
+    SolutionManager<EmployeeSchedule, HardMediumSoftBigDecimalScore> solutionManager;
 
     // TODO: Without any "time to live", the map may eventually grow out of memory.
     private final ConcurrentMap<String, Job> jobIdToJob = new ConcurrentHashMap<>();
 
     @Inject
     public EmployeeScheduleResource(SolverManager<EmployeeSchedule> solverManager,
-            SolutionManager<EmployeeSchedule, HardSoftBigDecimalScore> solutionManager) {
+            SolutionManager<EmployeeSchedule, HardMediumSoftBigDecimalScore> solutionManager) {
         this.solverManager = solverManager;
         this.solutionManager = solutionManager;
     }
@@ -104,7 +104,7 @@ public class EmployeeScheduleResource {
     @Consumes({ MediaType.APPLICATION_JSON })
     @Produces(MediaType.APPLICATION_JSON)
     @Path("analyze")
-    public ScoreAnalysis<HardSoftBigDecimalScore> analyze(EmployeeSchedule problem,
+    public ScoreAnalysis<HardMediumSoftBigDecimalScore> analyze(EmployeeSchedule problem,
             @QueryParam("fetchPolicy") ScoreAnalysisFetchPolicy fetchPolicy) {
         return analyzeSchedule(null, problem, fetchPolicy);
     }
@@ -128,7 +128,7 @@ public class EmployeeScheduleResource {
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     @Path("{jobId}/analysis")
-    public ScoreAnalysis<HardSoftBigDecimalScore> getAnalysis(
+    public ScoreAnalysis<HardMediumSoftBigDecimalScore> getAnalysis(
             @Parameter(description = "The job ID returned by the POST method.") @PathParam("jobId") String jobId,
             @QueryParam("fetchPolicy") ScoreAnalysisFetchPolicy fetchPolicy) {
         Job job = jobIdToJob.get(jobId);
@@ -151,7 +151,7 @@ public class EmployeeScheduleResource {
         return analyzeSchedule(jobId, schedule, fetchPolicy);
     }
 
-    private ScoreAnalysis<HardSoftBigDecimalScore> analyzeSchedule(String jobId, EmployeeSchedule schedule,
+    private ScoreAnalysis<HardMediumSoftBigDecimalScore> analyzeSchedule(String jobId, EmployeeSchedule schedule,
             ScoreAnalysisFetchPolicy fetchPolicy) {
         ScoreAnalysisFetchPolicy policy = fetchPolicy != null ? fetchPolicy : ScoreAnalysisFetchPolicy.FETCH_ALL;
         try {
@@ -259,7 +259,7 @@ public class EmployeeScheduleResource {
 
     /**
      * Update the ConstraintConfiguration for a running job (or stored job) so clients can switch
-     * goal constraints between NONE / SOFT / HARD at runtime. If the solver is running, it will be
+     * goal constraints between NONE / SOFT / MEDIUM / HARD at runtime. If the solver is running, it will be
      * terminated and restarted so the new configuration takes effect.
      */
     @PUT

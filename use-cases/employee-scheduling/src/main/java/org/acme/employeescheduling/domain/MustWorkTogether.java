@@ -9,7 +9,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * Problem fact: when employeeA works a shift, employeeB must also work that same shift.
  * Optionally, a minimum number of overlapping shifts per week can be required via
  * {@code minShiftsTogetherPerWeek} (0 = disabled) and {@code minShiftsTogetherPerWeekSeverity}
- * ("HARD" or "SOFT", defaults to "SOFT").
+ * ("HARD", "MEDIUM", or "SOFT", defaults to "SOFT").
  */
 public class MustWorkTogether {
 
@@ -23,7 +23,7 @@ public class MustWorkTogether {
     private int minShiftsTogetherPerWeek = 0;
 
     /**
-     * Severity for the minimum-shifts-together-per-week goal: "HARD" or "SOFT" (default).
+     * Severity for the minimum-shifts-together-per-week goal: "HARD", "MEDIUM", or "SOFT" (default).
      */
     private String minShiftsTogetherPerWeekSeverity = "SOFT";
 

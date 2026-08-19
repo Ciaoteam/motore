@@ -16,7 +16,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  *       Set to {@code 0} to disable the minimum.</li>
  *   <li>{@code maxCount} – maximum number of concurrent employees with the skill.
  *       Set to {@code -1} to disable the maximum.</li>
- *   <li>{@code severity} – {@code "HARD"} or {@code "SOFT"}.</li>
+ *   <li>{@code severity} – {@code "HARD"}, {@code "MEDIUM"}, or {@code "SOFT"}.</li>
  * </ul>
  */
 public class ConcurrentSkillRequirement {
@@ -38,7 +38,7 @@ public class ConcurrentSkillRequirement {
     /** Maximum concurrent employees with the skill. -1 = disabled. */
     private int maxCount = -1;
 
-    /** "HARD" or "SOFT". */
+    /** "HARD", "MEDIUM", or "SOFT". */
     private String severity = "HARD";
 
     public ConcurrentSkillRequirement() {
