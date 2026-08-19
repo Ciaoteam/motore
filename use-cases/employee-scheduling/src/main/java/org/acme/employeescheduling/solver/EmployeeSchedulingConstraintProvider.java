@@ -2,6 +2,7 @@ package org.acme.employeescheduling.solver;
 
 import org.acme.common.ConstraintIdSanitizer;
 import static ai.timefold.solver.core.api.score.stream.Joiners.equal;
+import static ai.timefold.solver.core.api.score.stream.Joiners.filtering;
 import static ai.timefold.solver.core.api.score.stream.Joiners.lessThanOrEqual;
 import static ai.timefold.solver.core.api.score.stream.Joiners.overlapping;
 
@@ -82,7 +83,9 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 goalShiftsPerWeekPerEmployeeSoftZero(constraintFactory),
                 // Concurrent skill headcount
                 minConcurrentSkillHard(constraintFactory),
+                minConcurrentSkillZeroHard(constraintFactory),
                 minConcurrentSkillSoft(constraintFactory),
+                minConcurrentSkillZeroSoft(constraintFactory),
                 maxConcurrentSkillHard(constraintFactory),
                 maxConcurrentSkillSoft(constraintFactory)
         };
@@ -542,6 +545,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
     }
 
     // Min concurrent employees with a given skill (HARD)
+    // Case A: at least one qualified shift exists but count is below the minimum.
     Constraint minConcurrentSkillHard(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(ConcurrentSkillRequirement.class)
                 .filter(req -> req.getMinCount() > 0 && "HARD".equalsIgnoreCase(req.getSeverity()))
@@ -557,10 +561,26 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 .asConstraint(ConstraintIdSanitizer.sanitize("Min concurrent skill (HARD)"));
     }
 
+    // Min concurrent employees with a given skill – zero qualified shifts (HARD)
+    // Case B: no qualified shift overlaps the window at all — full shortfall = minCount.
+    Constraint minConcurrentSkillZeroHard(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(ConcurrentSkillRequirement.class)
+                .filter(req -> req.getMinCount() > 0 && "HARD".equalsIgnoreCase(req.getSeverity()))
+                .ifNotExists(Shift.class,
+                        overlapping(ConcurrentSkillRequirement::getWindowStart, ConcurrentSkillRequirement::getWindowEnd,
+                                Shift::getStart, Shift::getEnd),
+                        filtering((req, shift) -> shift.getEmployee() != null
+                                && shift.getEmployee().getSkills().contains(req.getSkill())))
+                .penalize(HardSoftBigDecimalScore.ONE_HARD,
+                        ConcurrentSkillRequirement::getMinCount)
+                .asConstraint(ConstraintIdSanitizer.sanitize("Min concurrent skill zero (HARD)"));
+    }
+
     // Min concurrent employees with a given skill (SOFT)
+    // Case A: at least one qualified shift exists but count is below the minimum.
     Constraint minConcurrentSkillSoft(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(ConcurrentSkillRequirement.class)
-                .filter(req -> req.getMinCount() > 0 && !"HARD".equalsIgnoreCase(req.getSeverity()))
+                .filter(req -> req.getMinCount() > 0 && "SOFT".equalsIgnoreCase(req.getSeverity()))
                 .join(Shift.class,
                         overlapping(ConcurrentSkillRequirement::getWindowStart, ConcurrentSkillRequirement::getWindowEnd,
                                 Shift::getStart, Shift::getEnd))
@@ -571,6 +591,21 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 .penalize(HardSoftBigDecimalScore.ONE_SOFT,
                         (req, count) -> req.getMinCount() - count)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Min concurrent skill (SOFT)"));
+    }
+
+    // Min concurrent employees with a given skill – zero qualified shifts (SOFT)
+    // Case B: no qualified shift overlaps the window at all — full shortfall = minCount.
+    Constraint minConcurrentSkillZeroSoft(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(ConcurrentSkillRequirement.class)
+                .filter(req -> req.getMinCount() > 0 && "SOFT".equalsIgnoreCase(req.getSeverity()))
+                .ifNotExists(Shift.class,
+                        overlapping(ConcurrentSkillRequirement::getWindowStart, ConcurrentSkillRequirement::getWindowEnd,
+                                Shift::getStart, Shift::getEnd),
+                        filtering((req, shift) -> shift.getEmployee() != null
+                                && shift.getEmployee().getSkills().contains(req.getSkill())))
+                .penalize(HardSoftBigDecimalScore.ONE_SOFT,
+                        ConcurrentSkillRequirement::getMinCount)
+                .asConstraint(ConstraintIdSanitizer.sanitize("Min concurrent skill zero (SOFT)"));
     }
 
     // Max concurrent employees with a given skill (HARD)
@@ -592,7 +627,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
     // Max concurrent employees with a given skill (SOFT)
     Constraint maxConcurrentSkillSoft(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(ConcurrentSkillRequirement.class)
-                .filter(req -> req.getMaxCount() >= 0 && !"HARD".equalsIgnoreCase(req.getSeverity()))
+                .filter(req -> req.getMaxCount() >= 0 && "SOFT".equalsIgnoreCase(req.getSeverity()))
                 .join(Shift.class,
                         overlapping(ConcurrentSkillRequirement::getWindowStart, ConcurrentSkillRequirement::getWindowEnd,
                                 Shift::getStart, Shift::getEnd))
