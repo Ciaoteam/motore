@@ -78,7 +78,6 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 undesiredDayForEmployee(constraintFactory),
                 desiredDayForEmployee(constraintFactory),
                 balanceEmployeeShiftAssignments(constraintFactory),
-                balanceEmployeeShiftTypes(constraintFactory),
                 // Goal constraints (SOFT variants)
                 goalShiftsPerWeekSoft(constraintFactory),
                 goalShiftsPerWeekSoftZero(constraintFactory),
@@ -181,26 +180,6 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                         (employee, shiftCount) -> shiftCount))
                 .penalizeBigDecimal(HardMediumSoftBigDecimalScore.ONE_SOFT, LoadBalance::unfairness)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Balance employee shift assignments"));
-    }
-
-    Constraint balanceEmployeeShiftTypes(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(Shift.class)
-                .filter(shift -> shift.getEmployee() != null && shift.getStart() != null)
-                .groupBy(
-                        Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
-                        Shift::getShiftType,
-                        ConstraintCollectors.count())
-                .groupBy(
-                        (employee, week, shiftType, shiftCount) -> employee,
-                        (employee, week, shiftType, shiftCount) -> week,
-                        ConstraintCollectors.loadBalance(
-                                (employee, week, shiftType, shiftCount) -> shiftType,
-                                (employee, week, shiftType, shiftCount) -> shiftCount))
-                .penalizeBigDecimal(
-                        HardMediumSoftBigDecimalScore.ONE_SOFT,
-                        (employee, week, loadBalance) -> loadBalance.unfairness())
-                .asConstraint(ConstraintIdSanitizer.sanitize("Balance employee shift types per week"));
     }
 
     // Must work together - partner missing (A assigned - B missing) (HARD)
