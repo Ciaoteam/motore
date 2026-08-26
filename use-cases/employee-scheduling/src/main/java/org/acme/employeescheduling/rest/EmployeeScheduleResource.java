@@ -9,6 +9,8 @@ import ai.timefold.solver.core.api.solver.SolverManager;
 import ai.timefold.solver.core.api.solver.SolverStatus;
 import ai.timefold.solver.core.enterprise.TimefoldSolverEnterpriseService.EnterpriseLicenseException;
 import ai.timefold.solver.core.enterprise.TimefoldSolverEnterpriseService.EnterpriseProductException;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -25,6 +27,7 @@ import org.acme.employeescheduling.domain.ConstraintConfiguration;
 import org.acme.employeescheduling.domain.EmployeeSchedule;
 import org.acme.employeescheduling.rest.exception.EmployeeScheduleSolverException;
 import org.acme.employeescheduling.rest.exception.ErrorInfo;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.openapi.annotations.Operation;
 import org.eclipse.microprofile.openapi.annotations.enums.SchemaType;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
@@ -36,10 +39,15 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Tag(name = "Employee Schedules", description = "Employee Schedules service for assigning employees to shifts.")
 @Path("schedules")
@@ -50,14 +58,69 @@ public class EmployeeScheduleResource {
     SolverManager<EmployeeSchedule> solverManager;
     SolutionManager<EmployeeSchedule, HardMediumSoftBigDecimalScore> solutionManager;
 
-    // TODO: Without any "time to live", the map may eventually grow out of memory.
     private final ConcurrentMap<String, Job> jobIdToJob = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor(
+            r -> { Thread t = new Thread(r, "job-cleaner"); t.setDaemon(true); return t; });
+
+    @ConfigProperty(name = "motore.job.ttl", defaultValue = "PT1H")
+    Duration jobTtl;
+
+    @ConfigProperty(name = "motore.job.cleanup-interval", defaultValue = "PT5M")
+    Duration cleanupInterval;
 
     @Inject
     public EmployeeScheduleResource(SolverManager<EmployeeSchedule> solverManager,
             SolutionManager<EmployeeSchedule, HardMediumSoftBigDecimalScore> solutionManager) {
         this.solverManager = solverManager;
         this.solutionManager = solutionManager;
+    }
+
+    @PostConstruct
+    void startCleaner() {
+        // Back-date any legacy jobs that were accumulated before this update was deployed.
+        // Those jobs have no completedAt (null) because they were created with the old code.
+        // Setting their completedAt to Instant.EPOCH guarantees the very first sweep evicts them.
+        // Jobs that are still actively solving are left alone; the sweeper will handle them
+        // once they finish.
+        jobIdToJob.replaceAll((id, job) -> {
+            if (job.completedAt() == null && solverManager.getSolverStatus(id) == SolverStatus.NOT_SOLVING) {
+                return new Job(job.schedule(), job.exception(), Instant.EPOCH);
+            }
+            return job;
+        });
+
+        long intervalSeconds = Math.max(1, cleanupInterval.getSeconds());
+        // initialDelay=0 so the first sweep starts immediately rather than waiting a full interval.
+        cleaner.scheduleAtFixedRate(this::evictExpiredJobs, 0, intervalSeconds, TimeUnit.SECONDS);
+        LOGGER.info("Job cleaner started: TTL={}, sweep interval={}s", jobTtl, intervalSeconds);
+    }
+
+    @PreDestroy
+    void stopCleaner() {
+        cleaner.shutdownNow();
+        try {
+            cleaner.awaitTermination(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    void evictExpiredJobs() {
+        Instant cutoff = Instant.now().minus(jobTtl);
+        jobIdToJob.entrySet().removeIf(entry -> {
+            Job job = entry.getValue();
+            // completedAt is null only for legacy jobs that slipped through startCleaner (edge case).
+            if (job.completedAt() != null && job.completedAt().isBefore(cutoff)) {
+                SolverStatus status = solverManager.getSolverStatus(entry.getKey());
+                // NOT_SOLVING is the normal state of a successfully solved (or terminated) job.
+                // SOLVING_SCHEDULED / SOLVING_ACTIVE mean the solver is still running — never evict those.
+                if (status == SolverStatus.NOT_SOLVING) {
+                    LOGGER.debug("Evicting expired job {}.", entry.getKey());
+                    return true;
+                }
+            }
+            return false;
+        });
     }
 
     @Operation(summary = "List the job IDs of all submitted schedules.")
@@ -304,14 +367,14 @@ public class EmployeeScheduleResource {
         return Response.ok(schedule).build();
     }
 
-    private record Job(EmployeeSchedule schedule, Throwable exception) {
+    private record Job(EmployeeSchedule schedule, Throwable exception, Instant completedAt) {
 
         static Job ofSchedule(EmployeeSchedule schedule) {
-            return new Job(schedule, null);
+            return new Job(schedule, null, Instant.now());
         }
 
         static Job ofException(Throwable error) {
-            return new Job(null, error);
+            return new Job(null, error, Instant.now());
         }
     }
 }
