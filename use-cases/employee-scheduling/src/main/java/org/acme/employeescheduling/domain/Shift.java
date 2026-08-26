@@ -96,6 +96,20 @@ public class Shift {
         return (int) ChronoUnit.MINUTES.between(start, end);
     }
 
+    public String getShiftType() {
+        if (start == null) {
+            return "UNSPECIFIED";
+        }
+        int startHour = start.getHour();
+        if (startHour < 12) {
+            return "MORNING";
+        }
+        if (startHour < 18) {
+            return "EVENING";
+        }
+        return "NIGHT";
+    }
+
     public boolean isOverlappingWithDate(LocalDate date) {
         return getStart().toLocalDate().equals(date) || getEnd().toLocalDate().equals(date);
     }
