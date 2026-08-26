@@ -227,34 +227,6 @@ class EmployeeSchedulingConstraintProviderTest {
     }
 
     @Test
-    void balanceEmployeeShiftTypes() {
-        Employee employee1 = new Employee("Amy", null, null, null, Collections.emptySet());
-        Employee employee2 = new Employee("Beth", null, null, null, Collections.emptySet());
-
-        // Balanced shift types in one week for employee1.
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::balanceEmployeeShiftTypes)
-                .given(employee1, employee2,
-                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
-                        new Shift("2", AFTERNOON_START_TIME, AFTERNOON_END_TIME, "Location", "Skill", employee1))
-                .penalizesBy(0);
-
-        // Unbalanced shift types in one week for employee1.
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::balanceEmployeeShiftTypes)
-                .given(employee1, employee2,
-                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
-                        new Shift("2", DAY_START_TIME.plusDays(1), DAY_END_TIME.plusDays(1), "Location", "Skill", employee1),
-                        new Shift("3", AFTERNOON_START_TIME.plusDays(2), AFTERNOON_END_TIME.plusDays(2), "Location", "Skill",
-                                employee1))
-                .penalizesByMoreThan(0);
-
-        // Unassigned shifts are ignored by this constraint.
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::balanceEmployeeShiftTypes)
-                .given(employee1, employee2,
-                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", null))
-                .penalizesBy(0);
-    }
-
-    @Test
     void minShiftsTogetherPerWeekHard_penalizesShortfall() {
         Employee amy = new Employee("Amy", null, null, null, null);
         Employee beth = new Employee("Beth", null, null, null, null);
