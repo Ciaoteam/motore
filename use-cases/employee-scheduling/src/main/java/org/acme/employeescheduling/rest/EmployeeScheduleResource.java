@@ -77,6 +77,18 @@ public class EmployeeScheduleResource {
 
     @PostConstruct
     void startCleaner() {
+        // Back-date any legacy jobs that were accumulated before this update was deployed.
+        // Those jobs have no completedAt (null) because they were created with the old code.
+        // Setting their completedAt to Instant.EPOCH guarantees the very first sweep evicts them.
+        // Jobs that are still actively solving are left alone; the sweeper will handle them
+        // once they finish.
+        jobIdToJob.replaceAll((id, job) -> {
+            if (job.completedAt() == null && solverManager.getSolverStatus(id) == SolverStatus.NOT_SOLVING) {
+                return new Job(job.schedule(), job.exception(), Instant.EPOCH);
+            }
+            return job;
+        });
+
         long intervalSeconds = Math.max(1, cleanupInterval.getSeconds());
         // initialDelay=0 so the first sweep starts immediately rather than waiting a full interval.
         cleaner.scheduleAtFixedRate(this::evictExpiredJobs, 0, intervalSeconds, TimeUnit.SECONDS);
@@ -97,9 +109,11 @@ public class EmployeeScheduleResource {
         Instant cutoff = Instant.now().minus(jobTtl);
         jobIdToJob.entrySet().removeIf(entry -> {
             Job job = entry.getValue();
-            // Only remove jobs that are no longer solving and have passed their TTL.
+            // completedAt is null only for legacy jobs that slipped through startCleaner (edge case).
             if (job.completedAt() != null && job.completedAt().isBefore(cutoff)) {
                 SolverStatus status = solverManager.getSolverStatus(entry.getKey());
+                // NOT_SOLVING is the normal state of a successfully solved (or terminated) job.
+                // SOLVING_SCHEDULED / SOLVING_ACTIVE mean the solver is still running — never evict those.
                 if (status == SolverStatus.NOT_SOLVING) {
                     LOGGER.debug("Evicting expired job {}.", entry.getKey());
                     return true;
