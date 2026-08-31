@@ -162,7 +162,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
     }
 
     Constraint noShiftCrossesWeekBoundary(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEachIncludingUnassigned(Shift.class)
+        return constraintFactory.forEach(Shift.class)
                 .filter(shift -> !getWeekStart(shift).equals(
                         shift.getEnd().minusNanos(1).toLocalDate().with(WeekFields.ISO.dayOfWeek(), 1)))
                 .penalize(HardMediumSoftBigDecimalScore.ONE_HARD)
