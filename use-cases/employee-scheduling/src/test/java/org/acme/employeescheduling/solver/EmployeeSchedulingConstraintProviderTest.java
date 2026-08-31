@@ -102,20 +102,6 @@ class EmployeeSchedulingConstraintProviderTest {
     }
 
     @Test
-    void noShiftCrossesWeekBoundary() {
-        Employee employee = new Employee("Amy", null, null, null, null);
-        LocalDateTime sunday = LocalDate.of(2021, 2, 7).atTime(23, 0);
-
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::noShiftCrossesWeekBoundary)
-                .given(employee, new Shift("crosses", sunday, sunday.plusHours(2), "Location", "Skill", employee))
-                .penalizes(1);
-
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::noShiftCrossesWeekBoundary)
-                .given(employee, new Shift("same week", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee))
-                .penalizes(0);
-    }
-
-    @Test
     void atLeast10HoursBetweenConsecutiveShifts() {
         Employee employee1 = new Employee("Amy", null, null, null, null);
         Employee employee2 = new Employee("Beth", null, null, null, null);
@@ -374,6 +360,20 @@ class EmployeeSchedulingConstraintProviderTest {
     }
 
     @Test
+    void maxWeeklyHoursMedium_proratesCrossWeekShiftMinutes() {
+        Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
+        ConstraintConfiguration configuration = new ConstraintConfiguration();
+        configuration.setMaxWeeklyMinutes(100);
+        configuration.setMaxWeeklySeverity(ConstraintConfiguration.Severity.MEDIUM);
+        LocalDateTime sunday23 = LocalDate.of(2021, 2, 7).atTime(23, 0);
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::maxWeeklyHoursMedium)
+                .given(employee, configuration,
+                        new Shift("cross-week", sunday23, sunday23.plusHours(3), "Location", "Skill", employee))
+                .penalizesBy(20);
+    }
+
+    @Test
     void goalShiftsPerWeekPerEmployeeMedium_penalizesDeviation() {
         Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
         employee.setTargetShiftsPerWeek(2);
@@ -382,6 +382,20 @@ class EmployeeSchedulingConstraintProviderTest {
         constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftsPerWeekPerEmployeeMedium)
                 .given(employee, new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee))
                 .penalizesBy(1);
+    }
+
+    @Test
+    void goalShiftsPerWeekHard_countsCrossWeekShiftInEachWeek() {
+        Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
+        ConstraintConfiguration configuration = new ConstraintConfiguration();
+        configuration.setTargetShiftsPerWeek(2);
+        configuration.setTargetShiftsPerWeekSeverity(ConstraintConfiguration.Severity.HARD);
+        LocalDateTime sunday23 = LocalDate.of(2021, 2, 7).atTime(23, 0);
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftsPerWeekHard)
+                .given(employee, configuration,
+                        new Shift("cross-week", sunday23, sunday23.plusHours(2), "Location", "Skill", employee))
+                .penalizesBy(2);
     }
 
     @Test
@@ -400,6 +414,23 @@ class EmployeeSchedulingConstraintProviderTest {
     }
 
     @Test
+    void goalShiftsPerWeekHardZero_treatsCrossWeekShiftAsAssignedInFollowingWeek() {
+        Employee amy = new Employee("Amy", Set.of("Skill"), null, null, null);
+        Employee beth = new Employee("Beth", Set.of("Skill"), null, null, null);
+        ConstraintConfiguration configuration = new ConstraintConfiguration();
+        configuration.setTargetShiftsPerWeek(1);
+        configuration.setTargetShiftsPerWeekSeverity(ConstraintConfiguration.Severity.HARD);
+        LocalDateTime sunday23 = LocalDate.of(2021, 2, 7).atTime(23, 0);
+        LocalDateTime monday9 = LocalDate.of(2021, 2, 8).atTime(9, 0);
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftsPerWeekHardZero)
+                .given(amy, beth, configuration,
+                        new Shift("amy-cross-week", sunday23, sunday23.plusHours(2), "Location", "Skill", amy),
+                        new Shift("beth-following-week", monday9, monday9.plusHours(8), "Location", "Skill", beth))
+                .penalizesBy(1);
+    }
+
+    @Test
     void goalShiftsPerWeekHardZero_penalizesWeeksWithOnlyUnassignedShifts() {
         Employee amy = new Employee("Amy", Set.of("Skill"), null, null, null);
         Employee beth = new Employee("Beth", Set.of("Skill"), null, null, null);
@@ -411,6 +442,20 @@ class EmployeeSchedulingConstraintProviderTest {
                 .given(amy, beth, configuration,
                         new Shift("unassigned", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", null))
                 .penalizesBy(2);
+    }
+
+    @Test
+    void goalMinutesPerWeekHard_proratesCrossWeekShiftMinutes() {
+        Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
+        ConstraintConfiguration configuration = new ConstraintConfiguration();
+        configuration.setTargetMinutesPerWeek(60);
+        configuration.setTargetMinutesPerWeekSeverity(ConstraintConfiguration.Severity.HARD);
+        LocalDateTime sunday23 = LocalDate.of(2021, 2, 7).atTime(23, 0);
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalMinutesPerWeekHard)
+                .given(employee, configuration,
+                        new Shift("cross-week", sunday23, sunday23.plusHours(3), "Location", "Skill", employee))
+                .penalizesBy(60);
     }
 
     @Test
@@ -458,5 +503,36 @@ class EmployeeSchedulingConstraintProviderTest {
         constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minShiftsTogetherPerWeekHard)
                 .given(amy, beth, mw, amyShift1)
                 .penalizes(0);
+    }
+
+    @Test
+    void minShiftsTogetherPerWeekHard_countsCrossWeekOverlapInEachWeek() {
+        Employee amy = new Employee("Amy", null, null, null, null);
+        Employee beth = new Employee("Beth", null, null, null, null);
+        MustWorkTogether requirement = new MustWorkTogether(amy, beth);
+        requirement.setMinShiftsTogetherPerWeek(2);
+        requirement.setMinShiftsTogetherPerWeekSeverity("HARD");
+        LocalDateTime sunday23 = LocalDate.of(2021, 2, 7).atTime(23, 0);
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minShiftsTogetherPerWeekHard)
+                .given(amy, beth, requirement,
+                        new Shift("amy-cross-week", sunday23, sunday23.plusHours(2), "Location", "Skill", amy),
+                        new Shift("beth-cross-week", sunday23, sunday23.plusHours(2), "Location", "Skill", beth))
+                .penalizesBy(2);
+    }
+
+    @Test
+    void minShiftsTogetherPerWeekHardZero_penalizesEachWeekOfCrossWeekShiftWithoutPartner() {
+        Employee amy = new Employee("Amy", null, null, null, null);
+        Employee beth = new Employee("Beth", null, null, null, null);
+        MustWorkTogether requirement = new MustWorkTogether(amy, beth);
+        requirement.setMinShiftsTogetherPerWeek(1);
+        requirement.setMinShiftsTogetherPerWeekSeverity("HARD");
+        LocalDateTime sunday23 = LocalDate.of(2021, 2, 7).atTime(23, 0);
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minShiftsTogetherPerWeekHardZero)
+                .given(amy, beth, requirement,
+                        new Shift("amy-cross-week", sunday23, sunday23.plusHours(2), "Location", "Skill", amy))
+                .penalizesBy(2);
     }
 }
