@@ -96,6 +96,14 @@ public class Shift {
         return (int) ChronoUnit.MINUTES.between(start, end);
     }
 
+    /**
+     * The clock time (ignoring the date) at which this shift starts, e.g. 09:00 or 21:00.
+     * Used to detect when an employee is repeatedly assigned the same kind of shift.
+     */
+    public LocalTime getStartTimeOfDay() {
+        return start.toLocalTime();
+    }
+
     public boolean isOverlappingWithDate(LocalDate date) {
         return getStart().toLocalDate().equals(date) || getEnd().toLocalDate().equals(date);
     }

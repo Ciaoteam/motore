@@ -205,6 +205,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 undesiredDayForEmployee(constraintFactory),
                 desiredDayForEmployee(constraintFactory),
                 balanceEmployeeShiftAssignments(constraintFactory),
+                varyShiftStartTimesForEmployee(constraintFactory),
                 // Goal constraints (SOFT variants)
                 goalShiftsPerWeekSoft(constraintFactory),
                 goalShiftsPerWeekSoftZero(constraintFactory),
@@ -307,6 +308,19 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                         (employee, shiftCount) -> shiftCount))
                 .penalizeBigDecimal(HardMediumSoftBigDecimalScore.ONE_SOFT, LoadBalance::unfairness)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Balance employee shift assignments"));
+    }
+
+    // Encourages variety: penalizes an employee being repeatedly assigned shifts that start at the
+    // same clock time within the same week (e.g. always mornings, or always evenings). Every pair of
+    // same-employee, same-week, same-start-time shifts adds a penalty, so the more repetitive an
+    // employee's week is, the higher the penalty; a varied schedule scores lowest.
+    Constraint varyShiftStartTimesForEmployee(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEachUniquePair(Shift.class,
+                equal(Shift::getEmployee),
+                equal(EmployeeSchedulingConstraintProvider::getWeekStart),
+                equal(Shift::getStartTimeOfDay))
+                .penalize(HardMediumSoftBigDecimalScore.ONE_SOFT)
+                .asConstraint(ConstraintIdSanitizer.sanitize("Vary shift start times for employee"));
     }
 
     // Must work together - partner missing (A assigned - B missing) (HARD)

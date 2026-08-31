@@ -227,6 +227,54 @@ class EmployeeSchedulingConstraintProviderTest {
     }
 
     @Test
+    void varyShiftStartTimesForEmployee() {
+        Employee employee1 = new Employee("Amy", null, null, null, null);
+        Employee employee2 = new Employee("Beth", null, null, null, null);
+
+        // Same employee, same week, same start time on two different days: penalized.
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::varyShiftStartTimesForEmployee)
+                .given(employee1, employee2,
+                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
+                        new Shift("2", DAY_START_TIME.plusDays(1), DAY_END_TIME.plusDays(1), "Location", "Skill",
+                                employee1))
+                .penalizes(1);
+
+        // Same employee, same week, different start times: not penalized.
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::varyShiftStartTimesForEmployee)
+                .given(employee1, employee2,
+                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
+                        new Shift("2", AFTERNOON_START_TIME.plusDays(1), AFTERNOON_END_TIME.plusDays(1), "Location", "Skill",
+                                employee1))
+                .penalizes(0);
+
+        // Same start time, but different employees: not penalized.
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::varyShiftStartTimesForEmployee)
+                .given(employee1, employee2,
+                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
+                        new Shift("2", DAY_START_TIME.plusDays(1), DAY_END_TIME.plusDays(1), "Location", "Skill",
+                                employee2))
+                .penalizes(0);
+
+        // Same employee, same start time, but different (non-overlapping ISO) weeks: not penalized.
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::varyShiftStartTimesForEmployee)
+                .given(employee1, employee2,
+                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
+                        new Shift("2", DAY_START_TIME.plusWeeks(1), DAY_END_TIME.plusWeeks(1), "Location", "Skill",
+                                employee1))
+                .penalizes(0);
+
+        // Three same-employee, same-week, same-start-time shifts: penalizes each of the 3 unique pairs.
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::varyShiftStartTimesForEmployee)
+                .given(employee1, employee2,
+                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
+                        new Shift("2", DAY_START_TIME.plusDays(1), DAY_END_TIME.plusDays(1), "Location", "Skill",
+                                employee1),
+                        new Shift("3", DAY_START_TIME.plusDays(2), DAY_END_TIME.plusDays(2), "Location", "Skill",
+                                employee1))
+                .penalizes(3);
+    }
+
+    @Test
     void minShiftsTogetherPerWeekHard_penalizesShortfall() {
         Employee amy = new Employee("Amy", null, null, null, null);
         Employee beth = new Employee("Beth", null, null, null, null);
