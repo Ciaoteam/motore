@@ -76,25 +76,25 @@ class EmployeeSchedulingConstraintProviderTest {
     void oneShiftPerDay() {
         Employee employee1 = new Employee("Amy", null, null, null, null);
         Employee employee2 = new Employee("Beth", null, null, null, null);
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::noOverlappingShifts)
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::oneShiftPerDay)
                 .given(employee1, employee2,
                         new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
                         new Shift("2", DAY_START_TIME, DAY_END_TIME, "Location 2", "Skill", employee1))
                 .penalizes(1);
 
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::noOverlappingShifts)
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::oneShiftPerDay)
                 .given(employee1, employee2,
                         new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
                         new Shift("2", DAY_START_TIME, DAY_END_TIME, "Location 2", "Skill", employee2))
                 .penalizes(0);
 
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::noOverlappingShifts)
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::oneShiftPerDay)
                 .given(employee1, employee2,
                         new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
                         new Shift("2", AFTERNOON_START_TIME, AFTERNOON_END_TIME, "Location 2", "Skill", employee1))
                 .penalizes(1);
 
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::noOverlappingShifts)
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::oneShiftPerDay)
                 .given(employee1, employee2,
                         new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
                         new Shift("2", DAY_START_TIME.plusDays(1), DAY_END_TIME.plusDays(1), "Location 2", "Skill", employee1))
@@ -279,6 +279,21 @@ class EmployeeSchedulingConstraintProviderTest {
     }
 
     @Test
+    void minShiftsTogetherPerWeekHard_penalizesNoOverlap() {
+        Employee amy = new Employee("Amy", null, null, null, null);
+        Employee beth = new Employee("Beth", null, null, null, null);
+        MustWorkTogether requirement = new MustWorkTogether(amy, beth);
+        requirement.setMinShiftsTogetherPerWeek(2);
+        requirement.setMinShiftsTogetherPerWeekSeverity("HARD");
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minShiftsTogetherPerWeekHard)
+                .given(amy, beth, requirement,
+                        new Shift("a", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", amy),
+                        new Shift("b", AFTERNOON_END_TIME, AFTERNOON_END_TIME.plusHours(8), "Location", "Skill", beth))
+                .penalizesBy(2);
+    }
+
+    @Test
     void minShiftsTogetherPerWeekSoft_penalizesShortfall() {
         Employee amy = new Employee("Amy", null, null, null, null);
         Employee beth = new Employee("Beth", null, null, null, null);
@@ -353,6 +368,37 @@ class EmployeeSchedulingConstraintProviderTest {
         constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftsPerWeekPerEmployeeMedium)
                 .given(employee, new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee))
                 .penalizesBy(1);
+    }
+
+    @Test
+    void goalShiftsPerWeekHardZero_penalizesEmptyScheduledWeeks() {
+        Employee amy = new Employee("Amy", Set.of("Skill"), null, null, null);
+        Employee beth = new Employee("Beth", Set.of("Skill"), null, null, null);
+        ConstraintConfiguration configuration = new ConstraintConfiguration();
+        configuration.setTargetShiftsPerWeek(1);
+        configuration.setTargetShiftsPerWeekSeverity(ConstraintConfiguration.Severity.HARD);
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftsPerWeekHardZero)
+                .given(amy, beth, configuration,
+                        new Shift("a", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", amy),
+                        new Shift("b", DAY_START_TIME.plusWeeks(1), DAY_END_TIME.plusWeeks(1), "Location", "Skill", beth))
+                .penalizesBy(2);
+    }
+
+    @Test
+    void maxWeeklyHoursMedium_doesNotCombineWeeksFromDifferentYears() {
+        Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
+        ConstraintConfiguration configuration = new ConstraintConfiguration();
+        configuration.setMaxWeeklyMinutes(60);
+        configuration.setMaxWeeklySeverity(ConstraintConfiguration.Severity.MEDIUM);
+        LocalDateTime firstWeek = LocalDate.of(2024, 1, 1).atTime(9, 0);
+        LocalDateTime secondWeek = LocalDate.of(2025, 1, 1).atTime(9, 0);
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::maxWeeklyHoursMedium)
+                .given(employee, configuration,
+                        new Shift("first", firstWeek, firstWeek.plusHours(1), "Location", "Skill", employee),
+                        new Shift("second", secondWeek, secondWeek.plusHours(1), "Location", "Skill", employee))
+                .penalizes(0);
     }
 
     @Test

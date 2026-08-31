@@ -7,6 +7,7 @@ import static ai.timefold.solver.core.api.score.stream.Joiners.lessThanOrEqual;
 import static ai.timefold.solver.core.api.score.stream.Joiners.overlapping;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.temporal.WeekFields;
@@ -18,6 +19,7 @@ import ai.timefold.solver.core.api.score.stream.ConstraintCollectors;
 import ai.timefold.solver.core.api.score.stream.ConstraintFactory;
 import ai.timefold.solver.core.api.score.stream.ConstraintProvider;
 import ai.timefold.solver.core.api.score.stream.common.LoadBalance;
+import ai.timefold.solver.core.api.score.stream.bi.BiConstraintStream;
 
 import org.acme.employeescheduling.domain.Employee;
 import org.acme.employeescheduling.domain.Shift;
@@ -43,6 +45,16 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 (shift1End.isBefore(shift2End)) ? shift1End : shift2End).toMinutes();
     }
 
+    private static LocalDate getWeekStart(Shift shift) {
+        return shift.getStart().toLocalDate().with(WeekFields.ISO.dayOfWeek(), 1);
+    }
+
+    private static BiConstraintStream<Employee, LocalDate> employeeWeeks(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Employee.class)
+                .join(Shift.class)
+                .groupBy((employee, shift) -> employee, (employee, shift) -> getWeekStart(shift));
+    }
+
     @Override
     public Constraint[] defineConstraints(ConstraintFactory constraintFactory) {
         return new Constraint[] {
@@ -56,8 +68,11 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 mustWorkTogetherMedium(constraintFactory),
                 mustWorkTogetherSoft(constraintFactory),
                 minShiftsTogetherPerWeekHard(constraintFactory),
+                minShiftsTogetherPerWeekHardZero(constraintFactory),
                 minShiftsTogetherPerWeekMedium(constraintFactory),
+                minShiftsTogetherPerWeekMediumZero(constraintFactory),
                 minShiftsTogetherPerWeekSoft(constraintFactory),
+                minShiftsTogetherPerWeekSoftZero(constraintFactory),
                 maxWeeklyHoursHard(constraintFactory),
                 maxWeeklyHoursMedium(constraintFactory),
                 maxWeeklyHoursSoft(constraintFactory),
@@ -239,12 +254,14 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                         && "HARD".equalsIgnoreCase(mw.getMinShiftsTogetherPerWeekSeverity()))
                 .join(Shift.class,
                         equal((shiftA, mw) -> mw.getEmployeeB(), Shift::getEmployee),
-                        overlapping((shiftA, mw) -> shiftA.getStart(), (shiftA, mw) -> shiftA.getEnd(),
-                                Shift::getStart, Shift::getEnd))
+                        equal((shiftA, mw) -> getWeekStart(shiftA), EmployeeSchedulingConstraintProvider::getWeekStart))
                 .groupBy(
                         (shiftA, mw, shiftB) -> mw,
-                        (shiftA, mw, shiftB) -> shiftA.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
-                        ConstraintCollectors.countTri())
+                        (shiftA, mw, shiftB) -> getWeekStart(shiftA),
+                        ConstraintCollectors.conditionally(
+                                (shiftA, mw, shiftB) -> shiftA.getStart().isBefore(shiftB.getEnd())
+                                        && shiftB.getStart().isBefore(shiftA.getEnd()),
+                                ConstraintCollectors.countTri()))
                 .filter((mw, week, count) -> count < mw.getMinShiftsTogetherPerWeek())
                 .penalize(HardMediumSoftBigDecimalScore.ONE_HARD,
                         (mw, week, count) -> mw.getMinShiftsTogetherPerWeek() - count)
@@ -260,12 +277,14 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                         && hasSeverity(mw.getMinShiftsTogetherPerWeekSeverity(), "MEDIUM"))
                 .join(Shift.class,
                         equal((shiftA, mw) -> mw.getEmployeeB(), Shift::getEmployee),
-                        overlapping((shiftA, mw) -> shiftA.getStart(), (shiftA, mw) -> shiftA.getEnd(),
-                                Shift::getStart, Shift::getEnd))
+                        equal((shiftA, mw) -> getWeekStart(shiftA), EmployeeSchedulingConstraintProvider::getWeekStart))
                 .groupBy(
                         (shiftA, mw, shiftB) -> mw,
-                        (shiftA, mw, shiftB) -> shiftA.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
-                        ConstraintCollectors.countTri())
+                        (shiftA, mw, shiftB) -> getWeekStart(shiftA),
+                        ConstraintCollectors.conditionally(
+                                (shiftA, mw, shiftB) -> shiftA.getStart().isBefore(shiftB.getEnd())
+                                        && shiftB.getStart().isBefore(shiftA.getEnd()),
+                                ConstraintCollectors.countTri()))
                 .filter((mw, week, count) -> count < mw.getMinShiftsTogetherPerWeek())
                 .penalize(HardMediumSoftBigDecimalScore.ONE_MEDIUM,
                         (mw, week, count) -> mw.getMinShiftsTogetherPerWeek() - count)
@@ -281,23 +300,64 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                         && hasSeverity(mw.getMinShiftsTogetherPerWeekSeverity(), "SOFT"))
                 .join(Shift.class,
                         equal((shiftA, mw) -> mw.getEmployeeB(), Shift::getEmployee),
-                        overlapping((shiftA, mw) -> shiftA.getStart(), (shiftA, mw) -> shiftA.getEnd(),
-                                Shift::getStart, Shift::getEnd))
+                        equal((shiftA, mw) -> getWeekStart(shiftA), EmployeeSchedulingConstraintProvider::getWeekStart))
                 .groupBy(
                         (shiftA, mw, shiftB) -> mw,
-                        (shiftA, mw, shiftB) -> shiftA.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
-                        ConstraintCollectors.countTri())
+                        (shiftA, mw, shiftB) -> getWeekStart(shiftA),
+                        ConstraintCollectors.conditionally(
+                                (shiftA, mw, shiftB) -> shiftA.getStart().isBefore(shiftB.getEnd())
+                                        && shiftB.getStart().isBefore(shiftA.getEnd()),
+                                ConstraintCollectors.countTri()))
                 .filter((mw, week, count) -> count < mw.getMinShiftsTogetherPerWeek())
                 .penalize(HardMediumSoftBigDecimalScore.ONE_SOFT,
                         (mw, week, count) -> mw.getMinShiftsTogetherPerWeek() - count)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Min shifts together per week - shortfall (SOFT)"));
     }
 
+    Constraint minShiftsTogetherPerWeekHardZero(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Shift.class)
+                .join(MustWorkTogether.class, equal(Shift::getEmployee, MustWorkTogether::getEmployeeA))
+                .filter((shiftA, mw) -> mw.getMinShiftsTogetherPerWeek() > 0
+                        && hasSeverity(mw.getMinShiftsTogetherPerWeekSeverity(), "HARD"))
+                .ifNotExists(Shift.class,
+                        equal((shiftA, mw) -> mw.getEmployeeB(), Shift::getEmployee),
+                        equal((shiftA, mw) -> getWeekStart(shiftA), EmployeeSchedulingConstraintProvider::getWeekStart))
+                .groupBy((shiftA, mw) -> mw, (shiftA, mw) -> getWeekStart(shiftA))
+                .penalize(HardMediumSoftBigDecimalScore.ONE_HARD, (mw, week) -> mw.getMinShiftsTogetherPerWeek())
+                .asConstraint(ConstraintIdSanitizer.sanitize("Min shifts together per week - zero (HARD)"));
+    }
+
+    Constraint minShiftsTogetherPerWeekMediumZero(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Shift.class)
+                .join(MustWorkTogether.class, equal(Shift::getEmployee, MustWorkTogether::getEmployeeA))
+                .filter((shiftA, mw) -> mw.getMinShiftsTogetherPerWeek() > 0
+                        && hasSeverity(mw.getMinShiftsTogetherPerWeekSeverity(), "MEDIUM"))
+                .ifNotExists(Shift.class,
+                        equal((shiftA, mw) -> mw.getEmployeeB(), Shift::getEmployee),
+                        equal((shiftA, mw) -> getWeekStart(shiftA), EmployeeSchedulingConstraintProvider::getWeekStart))
+                .groupBy((shiftA, mw) -> mw, (shiftA, mw) -> getWeekStart(shiftA))
+                .penalize(HardMediumSoftBigDecimalScore.ONE_MEDIUM, (mw, week) -> mw.getMinShiftsTogetherPerWeek())
+                .asConstraint(ConstraintIdSanitizer.sanitize("Min shifts together per week - zero (MEDIUM)"));
+    }
+
+    Constraint minShiftsTogetherPerWeekSoftZero(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Shift.class)
+                .join(MustWorkTogether.class, equal(Shift::getEmployee, MustWorkTogether::getEmployeeA))
+                .filter((shiftA, mw) -> mw.getMinShiftsTogetherPerWeek() > 0
+                        && hasSeverity(mw.getMinShiftsTogetherPerWeekSeverity(), "SOFT"))
+                .ifNotExists(Shift.class,
+                        equal((shiftA, mw) -> mw.getEmployeeB(), Shift::getEmployee),
+                        equal((shiftA, mw) -> getWeekStart(shiftA), EmployeeSchedulingConstraintProvider::getWeekStart))
+                .groupBy((shiftA, mw) -> mw, (shiftA, mw) -> getWeekStart(shiftA))
+                .penalize(HardMediumSoftBigDecimalScore.ONE_SOFT, (mw, week) -> mw.getMinShiftsTogetherPerWeek())
+                .asConstraint(ConstraintIdSanitizer.sanitize("Min shifts together per week - zero (SOFT)"));
+    }
+
     Constraint maxWeeklyHoursHard(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(Shift.class)
                 .groupBy(
                         Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        EmployeeSchedulingConstraintProvider::getWeekStart,
                         ConstraintCollectors.sum(shift -> Long.valueOf(Duration.between(shift.getStart(), shift.getEnd()).toMinutes())))
                 .join(ConstraintConfiguration.class)
                 .filter((employee, week, totalMinutes, cfg) -> {
@@ -316,7 +376,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
         return constraintFactory.forEach(Shift.class)
                 .groupBy(
                         Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        EmployeeSchedulingConstraintProvider::getWeekStart,
                         ConstraintCollectors.sum(shift -> Long.valueOf(Duration.between(shift.getStart(), shift.getEnd()).toMinutes())))
                 .join(ConstraintConfiguration.class)
                 .filter((employee, week, totalMinutes, cfg) -> {
@@ -335,7 +395,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
         return constraintFactory.forEach(Shift.class)
                 .groupBy(
                         Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        EmployeeSchedulingConstraintProvider::getWeekStart,
                         ConstraintCollectors.sum(shift -> Long.valueOf(Duration.between(shift.getStart(), shift.getEnd()).toMinutes())))
                 .join(ConstraintConfiguration.class)
                 .filter((employee, week, totalMinutes, cfg) -> {
@@ -412,7 +472,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
         return constraintFactory.forEach(Shift.class)
                 .groupBy(
                         Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        EmployeeSchedulingConstraintProvider::getWeekStart,
                         ConstraintCollectors.count())
                 .join(ConstraintConfiguration.class)
                 .filter((employee, week, shiftCount, cfg) -> cfg.getTargetShiftsPerWeek() > 0
@@ -427,7 +487,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
         return constraintFactory.forEach(Shift.class)
                 .groupBy(
                         Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        EmployeeSchedulingConstraintProvider::getWeekStart,
                         ConstraintCollectors.count())
                 .join(ConstraintConfiguration.class)
                 .filter((employee, week, shiftCount, cfg) -> cfg.getTargetShiftsPerWeek() > 0
@@ -442,7 +502,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
         return constraintFactory.forEach(Shift.class)
                 .groupBy(
                         Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        EmployeeSchedulingConstraintProvider::getWeekStart,
                         ConstraintCollectors.count())
                 .join(ConstraintConfiguration.class)
                 .filter((employee, week, shiftCount, cfg) -> cfg.getTargetShiftsPerWeek() > 0
@@ -457,7 +517,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
         return constraintFactory.forEach(Shift.class)
                 .groupBy(
                         Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        EmployeeSchedulingConstraintProvider::getWeekStart,
                         ConstraintCollectors.sum(shift -> Long.valueOf(Duration.between(shift.getStart(), shift.getEnd()).toMinutes())))
                 .join(ConstraintConfiguration.class)
                 .filter((employee, week, totalMinutes, cfg) -> {
@@ -478,7 +538,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
         return constraintFactory.forEach(Shift.class)
                 .groupBy(
                         Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        EmployeeSchedulingConstraintProvider::getWeekStart,
                         ConstraintCollectors.sum(shift -> Long.valueOf(Duration.between(shift.getStart(), shift.getEnd()).toMinutes())))
                 .join(ConstraintConfiguration.class)
                 .filter((employee, week, totalMinutes, cfg) -> cfg.getTargetMinutesPerWeek() > 0
@@ -496,7 +556,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
         return constraintFactory.forEach(Shift.class)
                 .groupBy(
                         Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        EmployeeSchedulingConstraintProvider::getWeekStart,
                         ConstraintCollectors.sum(shift -> Long.valueOf(Duration.between(shift.getStart(), shift.getEnd()).toMinutes())))
                 .join(ConstraintConfiguration.class)
                 .filter((employee, week, totalMinutes, cfg) -> {
@@ -520,7 +580,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                         && shift.getEmployee().getMinWeeklyMinutes() > 0)
                 .filter(shift -> "HARD".equalsIgnoreCase(shift.getEmployee().getMinWeeklySeverity()))
                 .groupBy(Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        EmployeeSchedulingConstraintProvider::getWeekStart,
                         ConstraintCollectors.sum(Shift::getDurationInMinutes))
                 .filter((employee, week, totalMinutes) -> totalMinutes < employee.getMinWeeklyMinutes())
                 .penalize(HardMediumSoftBigDecimalScore.ONE_HARD,
@@ -536,7 +596,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                         && shift.getEmployee().getMinWeeklyMinutes() > 0)
                 .filter(shift -> hasSeverity(shift.getEmployee().getMinWeeklySeverity(), "MEDIUM"))
                 .groupBy(Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        EmployeeSchedulingConstraintProvider::getWeekStart,
                         ConstraintCollectors.sum(Shift::getDurationInMinutes))
                 .filter((employee, week, totalMinutes) -> totalMinutes < employee.getMinWeeklyMinutes())
                 .penalize(HardMediumSoftBigDecimalScore.ONE_MEDIUM,
@@ -552,7 +612,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                         && shift.getEmployee().getMinWeeklyMinutes() > 0)
                 .filter(shift -> hasSeverity(shift.getEmployee().getMinWeeklySeverity(), "SOFT"))
                 .groupBy(Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        EmployeeSchedulingConstraintProvider::getWeekStart,
                         ConstraintCollectors.sum(Shift::getDurationInMinutes))
                 .filter((employee, week, totalMinutes) -> totalMinutes < employee.getMinWeeklyMinutes())
                 .penalize(HardMediumSoftBigDecimalScore.ONE_SOFT,
@@ -570,7 +630,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                             && "HARD".equalsIgnoreCase(e.getTargetShiftsPerWeekSeverity());
                 })
                 .groupBy(Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        EmployeeSchedulingConstraintProvider::getWeekStart,
                         ConstraintCollectors.count())
                 .filter((employee, week, shiftCount) ->
                         shiftCount != employee.getTargetShiftsPerWeek().intValue())
@@ -590,7 +650,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                             && hasSeverity(e.getTargetShiftsPerWeekSeverity(), "MEDIUM");
                 })
                 .groupBy(Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        EmployeeSchedulingConstraintProvider::getWeekStart,
                         ConstraintCollectors.count())
                 .filter((employee, week, shiftCount) ->
                         shiftCount != employee.getTargetShiftsPerWeek().intValue())
@@ -610,7 +670,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                             && "SOFT".equalsIgnoreCase(e.getTargetShiftsPerWeekSeverity());
                 })
                 .groupBy(Shift::getEmployee,
-                        shift -> shift.getStart().get(WeekFields.ISO.weekOfWeekBasedYear()),
+                        EmployeeSchedulingConstraintProvider::getWeekStart,
                         ConstraintCollectors.count())
                 .filter((employee, week, shiftCount) ->
                         shiftCount != employee.getTargetShiftsPerWeek().intValue())
@@ -620,71 +680,92 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target shifts per employee per week - individual (SOFT)"));
     }
 
-    // Zero-shift companions: employees with a target but NO assigned shifts at all
+    // Zero-shift companions: employees with no assignments in a scheduled week
 
     Constraint goalShiftsPerWeekPerEmployeeHardZero(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(Employee.class)
-                .filter(e -> e.getTargetShiftsPerWeek() != null
+        return employeeWeeks(constraintFactory)
+                .filter((e, week) -> e.getTargetShiftsPerWeek() != null
                         && e.getTargetShiftsPerWeek() > 0
                         && "HARD".equalsIgnoreCase(e.getTargetShiftsPerWeekSeverity()))
-                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+                .ifNotExists(Shift.class,
+                        equal((employee, week) -> employee, Shift::getEmployee),
+                        equal((employee, week) -> week, EmployeeSchedulingConstraintProvider::getWeekStart))
+                .map((employee, week) -> employee)
                 .penalize(HardMediumSoftBigDecimalScore.ONE_HARD, Employee::getTargetShiftsPerWeek)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target shifts per employee per week - individual zero (HARD)"));
     }
 
     Constraint goalShiftsPerWeekPerEmployeeMediumZero(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(Employee.class)
-                .filter(e -> e.getTargetShiftsPerWeek() != null
+        return employeeWeeks(constraintFactory)
+                .filter((e, week) -> e.getTargetShiftsPerWeek() != null
                         && e.getTargetShiftsPerWeek() > 0
                         && hasSeverity(e.getTargetShiftsPerWeekSeverity(), "MEDIUM"))
-                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+                .ifNotExists(Shift.class,
+                        equal((employee, week) -> employee, Shift::getEmployee),
+                        equal((employee, week) -> week, EmployeeSchedulingConstraintProvider::getWeekStart))
+                .map((employee, week) -> employee)
                 .penalize(HardMediumSoftBigDecimalScore.ONE_MEDIUM, Employee::getTargetShiftsPerWeek)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target shifts per employee per week - individual zero (MEDIUM)"));
     }
 
     Constraint goalShiftsPerWeekPerEmployeeSoftZero(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(Employee.class)
-                .filter(e -> e.getTargetShiftsPerWeek() != null
+        return employeeWeeks(constraintFactory)
+                .filter((e, week) -> e.getTargetShiftsPerWeek() != null
                         && e.getTargetShiftsPerWeek() > 0
                         && hasSeverity(e.getTargetShiftsPerWeekSeverity(), "SOFT"))
-                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+                .ifNotExists(Shift.class,
+                        equal((employee, week) -> employee, Shift::getEmployee),
+                        equal((employee, week) -> week, EmployeeSchedulingConstraintProvider::getWeekStart))
+                .map((employee, week) -> employee)
                 .penalize(HardMediumSoftBigDecimalScore.ONE_SOFT, Employee::getTargetShiftsPerWeek)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target shifts per employee per week - individual zero (SOFT)"));
     }
 
     Constraint minWeeklyHoursHardZero(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(Employee.class)
-                .filter(e -> e.getMinWeeklyMinutes() != null
+        return employeeWeeks(constraintFactory)
+                .filter((e, week) -> e.getMinWeeklyMinutes() != null
                         && e.getMinWeeklyMinutes() > 0
                         && "HARD".equalsIgnoreCase(e.getMinWeeklySeverity()))
-                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+                .ifNotExists(Shift.class,
+                        equal((employee, week) -> employee, Shift::getEmployee),
+                        equal((employee, week) -> week, EmployeeSchedulingConstraintProvider::getWeekStart))
+                .map((employee, week) -> employee)
                 .penalize(HardMediumSoftBigDecimalScore.ONE_HARD, Employee::getMinWeeklyMinutes)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Min weekly hours per employee zero (HARD)"));
     }
 
     Constraint minWeeklyHoursMediumZero(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(Employee.class)
-                .filter(e -> e.getMinWeeklyMinutes() != null
+        return employeeWeeks(constraintFactory)
+                .filter((e, week) -> e.getMinWeeklyMinutes() != null
                         && e.getMinWeeklyMinutes() > 0
                         && hasSeverity(e.getMinWeeklySeverity(), "MEDIUM"))
-                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+                .ifNotExists(Shift.class,
+                        equal((employee, week) -> employee, Shift::getEmployee),
+                        equal((employee, week) -> week, EmployeeSchedulingConstraintProvider::getWeekStart))
+                .map((employee, week) -> employee)
                 .penalize(HardMediumSoftBigDecimalScore.ONE_MEDIUM, Employee::getMinWeeklyMinutes)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Min weekly hours per employee zero (MEDIUM)"));
     }
 
     Constraint minWeeklyHoursSoftZero(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(Employee.class)
-                .filter(e -> e.getMinWeeklyMinutes() != null
+        return employeeWeeks(constraintFactory)
+                .filter((e, week) -> e.getMinWeeklyMinutes() != null
                         && e.getMinWeeklyMinutes() > 0
                         && hasSeverity(e.getMinWeeklySeverity(), "SOFT"))
-                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+                .ifNotExists(Shift.class,
+                        equal((employee, week) -> employee, Shift::getEmployee),
+                        equal((employee, week) -> week, EmployeeSchedulingConstraintProvider::getWeekStart))
+                .map((employee, week) -> employee)
                 .penalize(HardMediumSoftBigDecimalScore.ONE_SOFT, Employee::getMinWeeklyMinutes)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Min weekly hours per employee zero (SOFT)"));
     }
 
     Constraint goalShiftsPerWeekHardZero(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(Employee.class)
-                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+        return employeeWeeks(constraintFactory)
+                .ifNotExists(Shift.class,
+                        equal((employee, week) -> employee, Shift::getEmployee),
+                        equal((employee, week) -> week, EmployeeSchedulingConstraintProvider::getWeekStart))
+                .map((employee, week) -> employee)
                 .join(ConstraintConfiguration.class)
                 .filter((employee, cfg) -> cfg.getTargetShiftsPerWeek() > 0
                         && cfg.getTargetShiftsPerWeekSeverity() == ConstraintConfiguration.Severity.HARD)
@@ -694,8 +775,11 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
     }
 
     Constraint goalShiftsPerWeekMediumZero(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(Employee.class)
-                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+        return employeeWeeks(constraintFactory)
+                .ifNotExists(Shift.class,
+                        equal((employee, week) -> employee, Shift::getEmployee),
+                        equal((employee, week) -> week, EmployeeSchedulingConstraintProvider::getWeekStart))
+                .map((employee, week) -> employee)
                 .join(ConstraintConfiguration.class)
                 .filter((employee, cfg) -> cfg.getTargetShiftsPerWeek() > 0
                         && cfg.getTargetShiftsPerWeekSeverity() == ConstraintConfiguration.Severity.MEDIUM)
@@ -705,8 +789,11 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
     }
 
     Constraint goalShiftsPerWeekSoftZero(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(Employee.class)
-                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+        return employeeWeeks(constraintFactory)
+                .ifNotExists(Shift.class,
+                        equal((employee, week) -> employee, Shift::getEmployee),
+                        equal((employee, week) -> week, EmployeeSchedulingConstraintProvider::getWeekStart))
+                .map((employee, week) -> employee)
                 .join(ConstraintConfiguration.class)
                 .filter((employee, cfg) -> cfg.getTargetShiftsPerWeek() > 0
                         && cfg.getTargetShiftsPerWeekSeverity() == ConstraintConfiguration.Severity.SOFT)
@@ -716,8 +803,11 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
     }
 
     Constraint goalMinutesPerWeekHardZero(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(Employee.class)
-                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+        return employeeWeeks(constraintFactory)
+                .ifNotExists(Shift.class,
+                        equal((employee, week) -> employee, Shift::getEmployee),
+                        equal((employee, week) -> week, EmployeeSchedulingConstraintProvider::getWeekStart))
+                .map((employee, week) -> employee)
                 .join(ConstraintConfiguration.class)
                 .filter((employee, cfg) -> cfg.getTargetMinutesPerWeek() > 0
                         && cfg.getTargetMinutesPerWeekSeverity() == ConstraintConfiguration.Severity.HARD)
@@ -727,8 +817,11 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
     }
 
     Constraint goalMinutesPerWeekMediumZero(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(Employee.class)
-                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+        return employeeWeeks(constraintFactory)
+                .ifNotExists(Shift.class,
+                        equal((employee, week) -> employee, Shift::getEmployee),
+                        equal((employee, week) -> week, EmployeeSchedulingConstraintProvider::getWeekStart))
+                .map((employee, week) -> employee)
                 .join(ConstraintConfiguration.class)
                 .filter((employee, cfg) -> cfg.getTargetMinutesPerWeek() > 0
                         && cfg.getTargetMinutesPerWeekSeverity() == ConstraintConfiguration.Severity.MEDIUM)
@@ -738,8 +831,11 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
     }
 
     Constraint goalMinutesPerWeekSoftZero(ConstraintFactory constraintFactory) {
-        return constraintFactory.forEach(Employee.class)
-                .ifNotExists(Shift.class, equal(Function.identity(), Shift::getEmployee))
+        return employeeWeeks(constraintFactory)
+                .ifNotExists(Shift.class,
+                        equal((employee, week) -> employee, Shift::getEmployee),
+                        equal((employee, week) -> week, EmployeeSchedulingConstraintProvider::getWeekStart))
+                .map((employee, week) -> employee)
                 .join(ConstraintConfiguration.class)
                 .filter((employee, cfg) -> cfg.getTargetMinutesPerWeek() > 0
                         && cfg.getTargetMinutesPerWeekSeverity() == ConstraintConfiguration.Severity.SOFT)
