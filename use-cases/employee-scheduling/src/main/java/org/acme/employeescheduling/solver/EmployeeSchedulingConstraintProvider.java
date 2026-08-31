@@ -6,6 +6,7 @@ import static ai.timefold.solver.core.api.score.stream.Joiners.filtering;
 import static ai.timefold.solver.core.api.score.stream.Joiners.lessThanOrEqual;
 import static ai.timefold.solver.core.api.score.stream.Joiners.overlapping;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -35,6 +36,12 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
 
     private static final int MAX_MINUTES_PER_WEEK = 40 * 60;
     private static final int MAX_MINUTES_PER_MONTH = 160 * 60;
+
+    // A fractional soft weight used so that varyShiftStartTimesForEmployee only acts as a low-priority
+    // tie-breaker: its total impact stays far smaller than the smallest meaningful penalty/reward of any
+    // other (whole-number, minute-based) soft constraint, so it never outweighs them.
+    private static final HardMediumSoftBigDecimalScore VARY_SHIFT_START_TIMES_WEIGHT =
+            HardMediumSoftBigDecimalScore.of(BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("0.0001"));
 
     private record ShiftWeekOverlap(Shift shift, LocalDate weekStart, LocalDateTime overlapStart, LocalDateTime overlapEnd,
             int overlapMinutes) {
@@ -314,12 +321,15 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
     // same clock time within the same week (e.g. always mornings, or always evenings). Every pair of
     // same-employee, same-week, same-start-time shifts adds a penalty, so the more repetitive an
     // employee's week is, the higher the penalty; a varied schedule scores lowest.
+    // Uses a fractional weight (see VARY_SHIFT_START_TIMES_WEIGHT) so this preference is only ever
+    // applied as a low-priority tie-breaker and cannot outweigh or interfere with the other soft
+    // constraints, which all operate on whole-number (e.g. minute-based) magnitudes.
     Constraint varyShiftStartTimesForEmployee(ConstraintFactory constraintFactory) {
         return constraintFactory.forEachUniquePair(Shift.class,
                 equal(Shift::getEmployee),
                 equal(EmployeeSchedulingConstraintProvider::getWeekStart),
                 equal(Shift::getStartTimeOfDay))
-                .penalize(HardMediumSoftBigDecimalScore.ONE_SOFT)
+                .penalize(VARY_SHIFT_START_TIMES_WEIGHT)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Vary shift start times for employee"));
     }
 
