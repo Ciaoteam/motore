@@ -51,8 +51,8 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
 
     private static BiConstraintStream<Employee, LocalDate> employeeWeeks(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(Employee.class)
-                .join(Shift.class)
-                .groupBy((employee, shift) -> employee, (employee, shift) -> getWeekStart(shift));
+                .join(constraintFactory.forEachIncludingUnassigned(Shift.class)
+                        .groupBy(EmployeeSchedulingConstraintProvider::getWeekStart));
     }
 
     @Override
@@ -63,6 +63,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 noOverlappingShifts(constraintFactory),
                 atLeast10HoursBetweenTwoShifts(constraintFactory),
                 oneShiftPerDay(constraintFactory),
+                noShiftCrossesWeekBoundary(constraintFactory),
                 unavailableEmployee(constraintFactory),
                 mustWorkTogetherHard(constraintFactory),
                 mustWorkTogetherMedium(constraintFactory),
@@ -158,6 +159,14 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 equal(shift -> shift.getStart().toLocalDate()))
                 .penalize(HardMediumSoftBigDecimalScore.ONE_HARD)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Max one shift per day"));
+    }
+
+    Constraint noShiftCrossesWeekBoundary(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEachIncludingUnassigned(Shift.class)
+                .filter(shift -> !getWeekStart(shift).equals(
+                        shift.getEnd().minusNanos(1).toLocalDate().with(WeekFields.ISO.dayOfWeek(), 1)))
+                .penalize(HardMediumSoftBigDecimalScore.ONE_HARD)
+                .asConstraint(ConstraintIdSanitizer.sanitize("Shift must not cross a week boundary"));
     }
 
     Constraint unavailableEmployee(ConstraintFactory constraintFactory) {

@@ -102,6 +102,20 @@ class EmployeeSchedulingConstraintProviderTest {
     }
 
     @Test
+    void noShiftCrossesWeekBoundary() {
+        Employee employee = new Employee("Amy", null, null, null, null);
+        LocalDateTime sunday = LocalDate.of(2021, 2, 7).atTime(23, 0);
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::noShiftCrossesWeekBoundary)
+                .given(employee, new Shift("crosses", sunday, sunday.plusHours(2), "Location", "Skill", employee))
+                .penalizes(1);
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::noShiftCrossesWeekBoundary)
+                .given(employee, new Shift("same week", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee))
+                .penalizes(0);
+    }
+
+    @Test
     void atLeast10HoursBetweenConsecutiveShifts() {
         Employee employee1 = new Employee("Amy", null, null, null, null);
         Employee employee2 = new Employee("Beth", null, null, null, null);
@@ -382,6 +396,20 @@ class EmployeeSchedulingConstraintProviderTest {
                 .given(amy, beth, configuration,
                         new Shift("a", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", amy),
                         new Shift("b", DAY_START_TIME.plusWeeks(1), DAY_END_TIME.plusWeeks(1), "Location", "Skill", beth))
+                .penalizesBy(2);
+    }
+
+    @Test
+    void goalShiftsPerWeekHardZero_penalizesWeeksWithOnlyUnassignedShifts() {
+        Employee amy = new Employee("Amy", Set.of("Skill"), null, null, null);
+        Employee beth = new Employee("Beth", Set.of("Skill"), null, null, null);
+        ConstraintConfiguration configuration = new ConstraintConfiguration();
+        configuration.setTargetShiftsPerWeek(1);
+        configuration.setTargetShiftsPerWeekSeverity(ConstraintConfiguration.Severity.HARD);
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftsPerWeekHardZero)
+                .given(amy, beth, configuration,
+                        new Shift("unassigned", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", null))
                 .penalizesBy(2);
     }
 
