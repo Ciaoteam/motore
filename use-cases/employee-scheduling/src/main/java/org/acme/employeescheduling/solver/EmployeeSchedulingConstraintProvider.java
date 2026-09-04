@@ -180,7 +180,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 // Hard constraints
                 requiredSkill(constraintFactory),
                 noOverlappingShifts(constraintFactory),
-                atLeast10HoursBetweenTwoShifts(constraintFactory),
+                minimumRestBetweenTwoShifts(constraintFactory),
                 oneShiftPerDay(constraintFactory),
                 unavailableEmployee(constraintFactory),
                 mustWorkTogetherHard(constraintFactory),
@@ -260,17 +260,19 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 .asConstraint(ConstraintIdSanitizer.sanitize("Overlapping shift"));
     }
 
-    Constraint atLeast10HoursBetweenTwoShifts(ConstraintFactory constraintFactory) {
+    Constraint minimumRestBetweenTwoShifts(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(Shift.class)
                 .join(Shift.class, equal(Shift::getEmployee), lessThanOrEqual(Shift::getEnd, Shift::getStart))
+                .join(ConstraintConfiguration.class)
                 .filter((firstShift,
-                        secondShift) -> Duration.between(firstShift.getEnd(), secondShift.getStart()).toHours() < 10)
+                        secondShift, cfg) -> Duration.between(firstShift.getEnd(), secondShift.getStart()).toMinutes()
+                                < cfg.getMinimumRestMinutes())
                 .penalize(HardMediumSoftBigDecimalScore.ONE_HARD,
-                        (firstShift, secondShift) -> {
+                        (firstShift, secondShift, cfg) -> {
                             int breakLength = (int) Duration.between(firstShift.getEnd(), secondShift.getStart()).toMinutes();
-                            return (10 * 60) - breakLength;
+                            return cfg.getMinimumRestMinutes() - breakLength;
                         })
-                .asConstraint(ConstraintIdSanitizer.sanitize("At least 10 hours between 2 shifts"));
+                .asConstraint(ConstraintIdSanitizer.sanitize("Minimum rest between 2 shifts"));
     }
 
     Constraint oneShiftPerDay(ConstraintFactory constraintFactory) {
