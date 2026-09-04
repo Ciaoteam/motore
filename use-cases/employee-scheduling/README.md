@@ -10,7 +10,7 @@ Schedule shifts to employees, accounting for employee availability and shift ski
 |--------------------------------------|-------|-------------------------------------------------------------------------------|
 | Required skill                       | Hard  | An employee must have the required skill for their assigned shift.            |
 | No overlapping shifts                | Hard  | An employee cannot be assigned to two overlapping shifts.                     |
-| Minimum rest between two shifts       | Hard  | An employee must have at least the configured minimum rest between shifts. |
+| Minimum rest between two shifts       | Hard  | An employee must have at least the configured minimum rest between shifts.  |
 | One shift per day                    | Hard  | An employee can only be assigned to one shift per day.                        |
 | Unavailable employee                 | Hard  | An employee cannot be assigned to a shift during their unavailability period. |
 | Undesired day for employee           | Soft  | Avoid scheduling an employee on their undesired days.                         |
