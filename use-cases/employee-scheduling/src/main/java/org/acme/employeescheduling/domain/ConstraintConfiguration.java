@@ -78,6 +78,9 @@ public class ConstraintConfiguration {
     }
 
     public void setMinimumRestMinutes(int minimumRestMinutes) {
+        if (minimumRestMinutes < 0) {
+            throw new IllegalArgumentException("Minimum rest cannot be negative.");
+        }
         this.minimumRestMinutes = minimumRestMinutes;
     }
 

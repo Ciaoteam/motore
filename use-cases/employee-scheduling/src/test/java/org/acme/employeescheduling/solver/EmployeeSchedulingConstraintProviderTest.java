@@ -106,40 +106,40 @@ class EmployeeSchedulingConstraintProviderTest {
         Employee employee1 = new Employee("Amy", null, null, null, null);
         Employee employee2 = new Employee("Beth", null, null, null, null);
         ConstraintConfiguration configuration = new ConstraintConfiguration();
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::atLeast10HoursBetweenTwoShifts)
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minimumRestBetweenTwoShifts)
                 .given(employee1, employee2, configuration,
                         new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
                         new Shift("2", AFTERNOON_END_TIME, DAY_START_TIME.plusDays(1), "Location 2", "Skill", employee1))
                 .penalizesBy(240);
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::atLeast10HoursBetweenTwoShifts)
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minimumRestBetweenTwoShifts)
                 .given(employee1, employee2, configuration,
                         new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
                         new Shift("2", DAY_END_TIME, DAY_START_TIME.plusDays(1), "Location 2", "Skill", employee1))
                 .penalizesBy(480);
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::atLeast10HoursBetweenTwoShifts)
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minimumRestBetweenTwoShifts)
                 .given(employee1, employee2, configuration,
                         new Shift("1", DAY_END_TIME, DAY_START_TIME.plusDays(1), "Location", "Skill", employee1),
                         new Shift("2", DAY_START_TIME, DAY_END_TIME, "Location 2", "Skill", employee1))
                 .penalizesBy(480);
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::atLeast10HoursBetweenTwoShifts)
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minimumRestBetweenTwoShifts)
                 .given(employee1, employee2, configuration,
                         new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
                         new Shift("2", DAY_END_TIME.plusHours(8), DAY_START_TIME.plusDays(1), "Location 2", "Skill",
                                 employee1))
                 .penalizes(0);
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::atLeast10HoursBetweenTwoShifts)
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minimumRestBetweenTwoShifts)
                 .given(employee1, employee2, configuration,
                         new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
                         new Shift("2", AFTERNOON_END_TIME, DAY_START_TIME.plusDays(1), "Location 2", "Skill", employee2))
                 .penalizes(0);
         configuration.setMinimumRestMinutes(10 * 60);
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::atLeast10HoursBetweenTwoShifts)
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minimumRestBetweenTwoShifts)
                 .given(employee1, employee2, configuration,
                         new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
                         new Shift("2", DAY_END_TIME.plusHours(9), DAY_START_TIME.plusDays(1), "Location 2", "Skill",
                                 employee1))
                 .penalizesBy(60);
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::atLeast10HoursBetweenTwoShifts)
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::minimumRestBetweenTwoShifts)
                 .given(employee1, employee2, configuration,
                         new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee1),
                         new Shift("2", DAY_START_TIME.plusDays(1), DAY_END_TIME.plusDays(1), "Location 2", "Skill", employee1))

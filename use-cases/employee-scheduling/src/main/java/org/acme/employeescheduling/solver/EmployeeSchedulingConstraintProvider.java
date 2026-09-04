@@ -180,7 +180,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 // Hard constraints
                 requiredSkill(constraintFactory),
                 noOverlappingShifts(constraintFactory),
-                atLeast10HoursBetweenTwoShifts(constraintFactory),
+                minimumRestBetweenTwoShifts(constraintFactory),
                 oneShiftPerDay(constraintFactory),
                 unavailableEmployee(constraintFactory),
                 mustWorkTogetherHard(constraintFactory),
@@ -260,7 +260,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 .asConstraint(ConstraintIdSanitizer.sanitize("Overlapping shift"));
     }
 
-    Constraint atLeast10HoursBetweenTwoShifts(ConstraintFactory constraintFactory) {
+    Constraint minimumRestBetweenTwoShifts(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(Shift.class)
                 .join(Shift.class, equal(Shift::getEmployee), lessThanOrEqual(Shift::getEnd, Shift::getStart))
                 .join(ConstraintConfiguration.class)
