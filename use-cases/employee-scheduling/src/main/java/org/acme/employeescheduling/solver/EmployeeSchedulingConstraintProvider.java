@@ -263,14 +263,16 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
     Constraint atLeast10HoursBetweenTwoShifts(ConstraintFactory constraintFactory) {
         return constraintFactory.forEach(Shift.class)
                 .join(Shift.class, equal(Shift::getEmployee), lessThanOrEqual(Shift::getEnd, Shift::getStart))
+                .join(ConstraintConfiguration.class)
                 .filter((firstShift,
-                        secondShift) -> Duration.between(firstShift.getEnd(), secondShift.getStart()).toHours() < 10)
+                        secondShift, cfg) -> Duration.between(firstShift.getEnd(), secondShift.getStart()).toMinutes()
+                                < cfg.getMinimumRestMinutes())
                 .penalize(HardMediumSoftBigDecimalScore.ONE_HARD,
-                        (firstShift, secondShift) -> {
+                        (firstShift, secondShift, cfg) -> {
                             int breakLength = (int) Duration.between(firstShift.getEnd(), secondShift.getStart()).toMinutes();
-                            return (10 * 60) - breakLength;
+                            return cfg.getMinimumRestMinutes() - breakLength;
                         })
-                .asConstraint(ConstraintIdSanitizer.sanitize("At least 10 hours between 2 shifts"));
+                .asConstraint(ConstraintIdSanitizer.sanitize("Minimum rest between 2 shifts"));
     }
 
     Constraint oneShiftPerDay(ConstraintFactory constraintFactory) {

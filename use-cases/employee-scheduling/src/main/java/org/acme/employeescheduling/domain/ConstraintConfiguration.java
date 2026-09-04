@@ -12,6 +12,11 @@ public class ConstraintConfiguration {
     private Severity maxMonthlySeverity = Severity.HARD;
 
     /**
+     * Minimum rest between two shifts, in minutes. Defaults to 8 hours.
+     */
+    private int minimumRestMinutes = 8 * 60;
+
+    /**
      * Goal (target) number of shifts per employee per week. 0 disables the goal constraint.
      */
     private int targetShiftsPerWeek = 0;
@@ -66,6 +71,14 @@ public class ConstraintConfiguration {
 
     public void setMaxMonthlySeverity(Severity maxMonthlySeverity) {
         this.maxMonthlySeverity = maxMonthlySeverity;
+    }
+
+    public int getMinimumRestMinutes() {
+        return minimumRestMinutes;
+    }
+
+    public void setMinimumRestMinutes(int minimumRestMinutes) {
+        this.minimumRestMinutes = minimumRestMinutes;
     }
 
     public int getTargetShiftsPerWeek() {
