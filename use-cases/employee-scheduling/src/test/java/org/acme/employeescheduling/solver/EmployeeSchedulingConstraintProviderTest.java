@@ -480,6 +480,18 @@ class EmployeeSchedulingConstraintProviderTest {
     }
 
     @Test
+    void goalShiftCategoryCountPerEmployeeSoft_penalizesPartialShortage() {
+        Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
+        employee.setTargetShiftCategoryCounts(Map.of("EVENING", 4));
+        employee.setTargetShiftCategoryCountsSeverity("SOFT");
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftCategoryCountPerEmployeeSoft)
+                .given(employee,
+                        new Shift("1", AFTERNOON_START_TIME, AFTERNOON_END_TIME, "Location", "Skill", "EVENING", employee))
+                .penalizesBy(3);
+    }
+
+    @Test
     void goalShiftsPerWeekHard_countsCrossWeekShiftInEachWeek() {
         Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
         ConstraintConfiguration configuration = new ConstraintConfiguration();
