@@ -130,7 +130,7 @@ class EmployeeScheduleResourceTest {
     @Test
     void solveAcceptsShiftCategoryTargetsAndTheyAffectScore() {
         Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
-        employee.setTargetShiftCategoryCounts(Map.of("MORNING", 2));
+        employee.setTargetShiftCategoryCounts(Map.of("MORNING", 2, "EVENING", 4));
         employee.setTargetShiftCategoryCountsSeverity("SOFT");
 
         Shift shift = new Shift("1",
@@ -165,7 +165,7 @@ class EmployeeScheduleResourceTest {
         EmployeeSchedule solution = get("/schedules/" + jobId).then().extract().as(EmployeeSchedule.class);
         assertEquals(SolverStatus.NOT_SOLVING, solution.getSolverStatus());
         assertNotNull(solution.getScore());
-        assertTrue(solution.getScore().softScore().compareTo(BigDecimal.ZERO) < 0);
+        assertEquals(0, solution.getScore().softScore().compareTo(BigDecimal.valueOf(-5)));
     }
 
     private static boolean isTimefoldLicenseConfigured() {

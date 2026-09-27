@@ -442,14 +442,16 @@ class EmployeeSchedulingConstraintProviderTest {
     }
 
     @Test
-    void goalShiftCategoryCountPerEmployeeSoft_penalizesDeviation() {
+    void goalShiftCategoryCountPerEmployeeSoft_penalizesOverAssignment() {
         Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
-        employee.setTargetShiftCategoryCounts(Map.of("MORNING", 2));
+        employee.setTargetShiftCategoryCounts(Map.of("MORNING", 1));
         employee.setTargetShiftCategoryCountsSeverity("SOFT");
 
         constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftCategoryCountPerEmployeeSoft)
                 .given(employee,
-                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", "MORNING", employee))
+                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", "MORNING", employee),
+                        new Shift("2", DAY_START_TIME.plusDays(1), DAY_END_TIME.plusDays(1), "Location", "Skill", "MORNING",
+                                employee))
                 .penalizesBy(1);
     }
 
@@ -480,13 +482,14 @@ class EmployeeSchedulingConstraintProviderTest {
     }
 
     @Test
-    void goalShiftCategoryCountPerEmployeeSoft_penalizesPartialShortage() {
+    void goalShiftCategoryCountPerEmployeeSoftZero_penalizesPartialShortageWhenOtherCategoriesExist() {
         Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
         employee.setTargetShiftCategoryCounts(Map.of("EVENING", 4));
         employee.setTargetShiftCategoryCountsSeverity("SOFT");
 
-        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftCategoryCountPerEmployeeSoft)
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftCategoryCountPerEmployeeSoftZero)
                 .given(employee,
+                        new Shift("0", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", "MORNING", employee),
                         new Shift("1", AFTERNOON_START_TIME, AFTERNOON_END_TIME, "Location", "Skill", "EVENING", employee))
                 .penalizesBy(3);
     }
