@@ -20,6 +20,7 @@ public class Shift {
 
     private String location;
     private String requiredSkill;
+    private String category;
 
     @PlanningVariable
     private Employee employee;
@@ -28,19 +29,25 @@ public class Shift {
     }
 
     public Shift(LocalDateTime start, LocalDateTime end, String location, String requiredSkill) {
-        this(start, end, location, requiredSkill, null);
+        this(start, end, location, requiredSkill, null, null);
     }
 
     public Shift(LocalDateTime start, LocalDateTime end, String location, String requiredSkill, Employee employee) {
-        this(null, start, end, location, requiredSkill, employee);
+        this(null, start, end, location, requiredSkill, null, employee);
     }
 
     public Shift(String id, LocalDateTime start, LocalDateTime end, String location, String requiredSkill, Employee employee) {
+        this(id, start, end, location, requiredSkill, null, employee);
+    }
+
+    public Shift(String id, LocalDateTime start, LocalDateTime end, String location, String requiredSkill, String category,
+            Employee employee) {
         this.id = id;
         this.start = start;
         this.end = end;
         this.location = location;
         this.requiredSkill = requiredSkill;
+        this.category = category;
         this.employee = employee;
     }
 
@@ -82,6 +89,14 @@ public class Shift {
 
     public void setRequiredSkill(String requiredSkill) {
         this.requiredSkill = requiredSkill;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
     }
 
     public Employee getEmployee() {
