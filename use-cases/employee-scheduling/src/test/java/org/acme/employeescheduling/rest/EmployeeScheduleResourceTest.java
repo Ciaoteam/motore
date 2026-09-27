@@ -10,14 +10,20 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import ai.timefold.solver.core.api.solver.SolverStatus;
 
 import org.acme.employeescheduling.domain.EmployeeSchedule;
 import org.acme.employeescheduling.domain.Shift;
+import org.acme.employeescheduling.domain.Employee;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -119,6 +125,47 @@ class EmployeeScheduleResourceTest {
                 .asString();
         assertThat(shallowAnalysisError)
                 .contains("Score analysis requires Timefold Solver Enterprise Edition with a valid license.");
+    }
+
+    @Test
+    void solveAcceptsShiftCategoryTargetsAndTheyAffectScore() {
+        Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
+        employee.setTargetShiftCategoryCounts(Map.of("MORNING", 2, "EVENING", 4));
+        employee.setTargetShiftCategoryCountsSeverity("SOFT");
+
+        Shift shift = new Shift("1",
+                LocalDateTime.parse("2026-01-05T09:00:00"),
+                LocalDateTime.parse("2026-01-05T17:00:00"),
+                "Location",
+                "Skill",
+                "MORNING",
+                null);
+
+        EmployeeSchedule testSchedule = new EmployeeSchedule();
+        testSchedule.setEmployees(List.of(employee));
+        testSchedule.setShifts(List.of(shift));
+
+        String jobId = given()
+                .contentType(ContentType.JSON)
+                .body(testSchedule)
+                .expect().contentType(ContentType.TEXT)
+                .when().post("/schedules")
+                .then()
+                .statusCode(200)
+                .extract()
+                .asString();
+
+        await()
+                .atMost(Duration.ofMinutes(5))
+                .pollInterval(Duration.ofMillis(500L))
+                .until(() -> SolverStatus.NOT_SOLVING.name().equals(
+                        get("/schedules/" + jobId + "/status")
+                                .jsonPath().get("solverStatus")));
+
+        EmployeeSchedule solution = get("/schedules/" + jobId).then().extract().as(EmployeeSchedule.class);
+        assertEquals(SolverStatus.NOT_SOLVING, solution.getSolverStatus());
+        assertNotNull(solution.getScore());
+        assertEquals(0, solution.getScore().softScore().compareTo(BigDecimal.valueOf(-5)));
     }
 
     private static boolean isTimefoldLicenseConfigured() {

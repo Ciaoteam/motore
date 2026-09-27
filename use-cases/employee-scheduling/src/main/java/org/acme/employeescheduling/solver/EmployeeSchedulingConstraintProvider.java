@@ -10,10 +10,13 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.temporal.WeekFields;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.function.Function;
 
 import ai.timefold.solver.core.api.score.HardMediumSoftBigDecimalScore;
@@ -36,6 +39,7 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
 
     private static final int MAX_MINUTES_PER_WEEK = 40 * 60;
     private static final int MAX_MINUTES_PER_MONTH = 160 * 60;
+    private static final LocalTime MORNING_END_EXCLUSIVE = LocalTime.of(14, 0);
 
     // A fractional soft weight used so that varyShiftStartTimesForEmployee only acts as a low-priority
     // tie-breaker: its total impact stays far smaller than the smallest meaningful penalty/reward of any
@@ -50,6 +54,9 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
             return shift.getEmployee();
         }
 
+        private record EmployeeCategoryTarget(Employee employee, String category, int targetCount) {
+        }
+
         boolean overlaps(Shift otherShift) {
             return getMinuteOverlap(overlapStart, overlapEnd, otherShift.getStart(), otherShift.getEnd()) > 0;
         }
@@ -57,6 +64,18 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
 
     private static boolean hasSeverity(String actualSeverity, String expectedSeverity) {
         return expectedSeverity.equalsIgnoreCase(actualSeverity);
+    }
+
+    private static String normalizeShiftCategory(String category) {
+        return category == null ? null : category.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private static String resolveShiftCategory(Shift shift) {
+        String explicitCategory = normalizeShiftCategory(shift.getCategory());
+        if (explicitCategory != null && !explicitCategory.isEmpty()) {
+            return explicitCategory;
+        }
+        return shift.getStartTimeOfDay().isBefore(MORNING_END_EXCLUSIVE) ? "MORNING" : "EVENING";
     }
 
     private static int getMinuteOverlap(LocalDateTime firstStart, LocalDateTime firstEnd,
@@ -232,6 +251,16 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 goalShiftsPerWeekPerEmployeeMediumZero(constraintFactory),
                 goalShiftsPerWeekPerEmployeeSoft(constraintFactory),
                 goalShiftsPerWeekPerEmployeeSoftZero(constraintFactory),
+                // Per-employee target shift-category counts
+                goalShiftCategoryCountPerEmployeeHard(constraintFactory),
+                goalShiftCategoryCountPerEmployeeHardZero(constraintFactory),
+                goalShiftCategoryCountPerEmployeeHardNoAssignments(constraintFactory),
+                goalShiftCategoryCountPerEmployeeMedium(constraintFactory),
+                goalShiftCategoryCountPerEmployeeMediumZero(constraintFactory),
+                goalShiftCategoryCountPerEmployeeMediumNoAssignments(constraintFactory),
+                goalShiftCategoryCountPerEmployeeSoft(constraintFactory),
+                goalShiftCategoryCountPerEmployeeSoftZero(constraintFactory),
+                goalShiftCategoryCountPerEmployeeSoftNoAssignments(constraintFactory),
                 // Concurrent skill headcount
                 minConcurrentSkillHard(constraintFactory),
                 minConcurrentSkillZeroHard(constraintFactory),
@@ -728,6 +757,163 @@ public class EmployeeSchedulingConstraintProvider implements ConstraintProvider 
                 .map((employee, week) -> employee)
                 .penalize(HardMediumSoftBigDecimalScore.ONE_SOFT, Employee::getTargetShiftsPerWeek)
                 .asConstraint(ConstraintIdSanitizer.sanitize("Goal: target shifts per employee per week - individual zero (SOFT)"));
+    }
+
+    private static boolean hasCategoryTargets(Employee employee) {
+        return employee.getTargetShiftCategoryCounts() != null && !employee.getTargetShiftCategoryCounts().isEmpty();
+    }
+
+    private static Iterable<EmployeeCategoryTarget> categoryTargets(Employee employee, String severity) {
+        if (!hasCategoryTargets(employee) || !hasSeverity(employee.getTargetShiftCategoryCountsSeverity(), severity)) {
+            return List.of();
+        }
+        List<EmployeeCategoryTarget> targets = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : employee.getTargetShiftCategoryCounts().entrySet()) {
+            Integer targetCount = entry.getValue();
+            String category = normalizeShiftCategory(entry.getKey());
+            if (targetCount == null || targetCount <= 0 || category == null || category.isEmpty()) {
+                continue;
+            }
+            targets.add(new EmployeeCategoryTarget(employee, category, targetCount));
+        }
+        return targets;
+    }
+
+    private static Integer getTargetCountForCategory(Employee employee, String category) {
+        if (employee == null || !hasCategoryTargets(employee)) {
+            return null;
+        }
+        String normalizedCategory = normalizeShiftCategory(category);
+        for (Map.Entry<String, Integer> entry : employee.getTargetShiftCategoryCounts().entrySet()) {
+            String normalizedEntryCategory = normalizeShiftCategory(entry.getKey());
+            if (normalizedCategory != null && normalizedCategory.equals(normalizedEntryCategory)) {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
+    // Goal: target shift-category counts per individual employee over the planning horizon (HARD)
+    Constraint goalShiftCategoryCountPerEmployeeHard(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Shift.class)
+                .groupBy(Shift::getEmployee, EmployeeSchedulingConstraintProvider::resolveShiftCategory, ConstraintCollectors.count())
+                .filter((employee, category, shiftCount) -> employee != null && hasCategoryTargets(employee)
+                        && "HARD".equalsIgnoreCase(employee.getTargetShiftCategoryCountsSeverity()))
+                .filter((employee, category, shiftCount) -> {
+                    Integer target = getTargetCountForCategory(employee, category);
+                    return target != null && target > 0 && shiftCount.intValue() > target.intValue();
+                })
+                .penalize(HardMediumSoftBigDecimalScore.ONE_HARD, (employee, category, shiftCount) ->
+                        shiftCount.intValue() - getTargetCountForCategory(employee, category).intValue())
+                .asConstraint(ConstraintIdSanitizer
+                        .sanitize("Goal: target shift category counts per employee - planning horizon (HARD)"));
+    }
+
+    // Goal: target shift-category counts per individual employee over the planning horizon (MEDIUM)
+    Constraint goalShiftCategoryCountPerEmployeeMedium(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Shift.class)
+                .groupBy(Shift::getEmployee, EmployeeSchedulingConstraintProvider::resolveShiftCategory, ConstraintCollectors.count())
+                .filter((employee, category, shiftCount) -> employee != null && hasCategoryTargets(employee)
+                        && hasSeverity(employee.getTargetShiftCategoryCountsSeverity(), "MEDIUM"))
+                .filter((employee, category, shiftCount) -> {
+                    Integer target = getTargetCountForCategory(employee, category);
+                    return target != null && target > 0 && shiftCount.intValue() > target.intValue();
+                })
+                .penalize(HardMediumSoftBigDecimalScore.ONE_MEDIUM, (employee, category, shiftCount) ->
+                        shiftCount.intValue() - getTargetCountForCategory(employee, category).intValue())
+                .asConstraint(ConstraintIdSanitizer
+                        .sanitize("Goal: target shift category counts per employee - planning horizon (MEDIUM)"));
+    }
+
+    // Goal: target shift-category counts per individual employee over the planning horizon (SOFT)
+    Constraint goalShiftCategoryCountPerEmployeeSoft(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Shift.class)
+                .groupBy(Shift::getEmployee, EmployeeSchedulingConstraintProvider::resolveShiftCategory, ConstraintCollectors.count())
+                .filter((employee, category, shiftCount) -> employee != null && hasCategoryTargets(employee)
+                        && "SOFT".equalsIgnoreCase(employee.getTargetShiftCategoryCountsSeverity()))
+                .filter((employee, category, shiftCount) -> {
+                    Integer target = getTargetCountForCategory(employee, category);
+                    return target != null && target > 0 && shiftCount.intValue() > target.intValue();
+                })
+                .penalize(HardMediumSoftBigDecimalScore.ONE_SOFT, (employee, category, shiftCount) ->
+                        shiftCount.intValue() - getTargetCountForCategory(employee, category).intValue())
+                .asConstraint(ConstraintIdSanitizer
+                        .sanitize("Goal: target shift category counts per employee - planning horizon (SOFT)"));
+    }
+
+    Constraint goalShiftCategoryCountPerEmployeeHardZero(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Employee.class)
+                .flattenLast(employee -> categoryTargets(employee, "HARD"))
+                .join(Shift.class,
+                        equal(EmployeeCategoryTarget::employee, Shift::getEmployee))
+                .groupBy((target, shift) -> target,
+                        ConstraintCollectors.conditionally(
+                                (target, shift) -> target.category().equals(resolveShiftCategory(shift)),
+                                ConstraintCollectors.countBi()))
+                .filter((target, matchingCount) -> matchingCount < target.targetCount())
+                .penalize(HardMediumSoftBigDecimalScore.ONE_HARD,
+                        (target, matchingCount) -> target.targetCount() - matchingCount.intValue())
+                .asConstraint(ConstraintIdSanitizer
+                        .sanitize("Goal: target shift category counts per employee - planning horizon zero (HARD)"));
+    }
+
+    Constraint goalShiftCategoryCountPerEmployeeHardNoAssignments(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Employee.class)
+                .flattenLast(employee -> categoryTargets(employee, "HARD"))
+                .ifNotExists(Shift.class, equal(EmployeeCategoryTarget::employee, Shift::getEmployee))
+                .penalize(HardMediumSoftBigDecimalScore.ONE_HARD, EmployeeCategoryTarget::targetCount)
+                .asConstraint(ConstraintIdSanitizer
+                        .sanitize("Goal: target shift category counts per employee - planning horizon no assignments (HARD)"));
+    }
+
+    Constraint goalShiftCategoryCountPerEmployeeMediumZero(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Employee.class)
+                .flattenLast(employee -> categoryTargets(employee, "MEDIUM"))
+                .join(Shift.class,
+                        equal(EmployeeCategoryTarget::employee, Shift::getEmployee))
+                .groupBy((target, shift) -> target,
+                        ConstraintCollectors.conditionally(
+                                (target, shift) -> target.category().equals(resolveShiftCategory(shift)),
+                                ConstraintCollectors.countBi()))
+                .filter((target, matchingCount) -> matchingCount < target.targetCount())
+                .penalize(HardMediumSoftBigDecimalScore.ONE_MEDIUM,
+                        (target, matchingCount) -> target.targetCount() - matchingCount.intValue())
+                .asConstraint(ConstraintIdSanitizer
+                        .sanitize("Goal: target shift category counts per employee - planning horizon zero (MEDIUM)"));
+    }
+
+    Constraint goalShiftCategoryCountPerEmployeeMediumNoAssignments(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Employee.class)
+                .flattenLast(employee -> categoryTargets(employee, "MEDIUM"))
+                .ifNotExists(Shift.class, equal(EmployeeCategoryTarget::employee, Shift::getEmployee))
+                .penalize(HardMediumSoftBigDecimalScore.ONE_MEDIUM, EmployeeCategoryTarget::targetCount)
+                .asConstraint(ConstraintIdSanitizer
+                        .sanitize("Goal: target shift category counts per employee - planning horizon no assignments (MEDIUM)"));
+    }
+
+    Constraint goalShiftCategoryCountPerEmployeeSoftZero(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Employee.class)
+                .flattenLast(employee -> categoryTargets(employee, "SOFT"))
+                .join(Shift.class,
+                        equal(EmployeeCategoryTarget::employee, Shift::getEmployee))
+                .groupBy((target, shift) -> target,
+                        ConstraintCollectors.conditionally(
+                                (target, shift) -> target.category().equals(resolveShiftCategory(shift)),
+                                ConstraintCollectors.countBi()))
+                .filter((target, matchingCount) -> matchingCount < target.targetCount())
+                .penalize(HardMediumSoftBigDecimalScore.ONE_SOFT,
+                        (target, matchingCount) -> target.targetCount() - matchingCount.intValue())
+                .asConstraint(ConstraintIdSanitizer
+                        .sanitize("Goal: target shift category counts per employee - planning horizon zero (SOFT)"));
+    }
+
+    Constraint goalShiftCategoryCountPerEmployeeSoftNoAssignments(ConstraintFactory constraintFactory) {
+        return constraintFactory.forEach(Employee.class)
+                .flattenLast(employee -> categoryTargets(employee, "SOFT"))
+                .ifNotExists(Shift.class, equal(EmployeeCategoryTarget::employee, Shift::getEmployee))
+                .penalize(HardMediumSoftBigDecimalScore.ONE_SOFT, EmployeeCategoryTarget::targetCount)
+                .asConstraint(ConstraintIdSanitizer
+                        .sanitize("Goal: target shift category counts per employee - planning horizon no assignments (SOFT)"));
     }
 
     Constraint minWeeklyHoursHardZero(ConstraintFactory constraintFactory) {

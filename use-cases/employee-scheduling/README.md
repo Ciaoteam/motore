@@ -16,9 +16,15 @@ Schedule shifts to employees, accounting for employee availability and shift ski
 | Undesired day for employee           | Soft  | Avoid scheduling an employee on their undesired days.                         |
 | Desired day for employee             | Soft  | Prefer scheduling an employee on their desired days.                          |
 | Balance employee shift assignments   | Soft  | Fairly distribute shifts across all employees.                                |
+| Target shift category counts         | Soft/Medium/Hard | Match per-employee target counts by shift category (for example MORNING/EVENING). |
 
 The minimum rest defaults to 8 hours and can be configured in the schedule request using
 `constraintConfiguration.minimumRestMinutes`.
+
+Shift-category targets are configured in the schedule request:
+- `shift.category` (optional): explicit category such as `MORNING` or `EVENING`; if omitted, category is derived from start time (`< 14:00` = `MORNING`, otherwise `EVENING`).
+- `employee.targetShiftCategoryCounts`: map of category to desired count.
+- `employee.targetShiftCategoryCountsSeverity`: `SOFT`, `MEDIUM`, or `HARD`.
 
 - [Run the application](#run-the-application)
 - [Run the packaged application](#run-the-packaged-application)

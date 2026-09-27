@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 
 import jakarta.inject.Inject;
@@ -438,6 +439,59 @@ class EmployeeSchedulingConstraintProviderTest {
         constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftsPerWeekPerEmployeeMedium)
                 .given(employee, new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", employee))
                 .penalizesBy(1);
+    }
+
+    @Test
+    void goalShiftCategoryCountPerEmployeeSoft_penalizesOverAssignment() {
+        Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
+        employee.setTargetShiftCategoryCounts(Map.of("MORNING", 1));
+        employee.setTargetShiftCategoryCountsSeverity("SOFT");
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftCategoryCountPerEmployeeSoft)
+                .given(employee,
+                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", "MORNING", employee),
+                        new Shift("2", DAY_START_TIME.plusDays(1), DAY_END_TIME.plusDays(1), "Location", "Skill", "MORNING",
+                                employee))
+                .penalizesBy(1);
+    }
+
+    @Test
+    void goalShiftCategoryCountPerEmployeeSoftZero_penalizesMissingCategoryAssignments() {
+        Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
+        employee.setTargetShiftCategoryCounts(Map.of("EVENING", 4));
+        employee.setTargetShiftCategoryCountsSeverity("SOFT");
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftCategoryCountPerEmployeeSoftZero)
+                .given(employee,
+                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", "MORNING", employee))
+                .penalizesBy(4);
+    }
+
+    @Test
+    void goalShiftCategoryCountPerEmployeeSoft_honorsExactMatch() {
+        Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
+        employee.setTargetShiftCategoryCounts(Map.of("morning", 2));
+        employee.setTargetShiftCategoryCountsSeverity("SOFT");
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftCategoryCountPerEmployeeSoft)
+                .given(employee,
+                        new Shift("1", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", "MORNING", employee),
+                        new Shift("2", DAY_START_TIME.plusDays(1), DAY_END_TIME.plusDays(1), "Location", "Skill", "morning",
+                                employee))
+                .penalizes(0);
+    }
+
+    @Test
+    void goalShiftCategoryCountPerEmployeeSoftZero_penalizesPartialShortageWhenOtherCategoriesExist() {
+        Employee employee = new Employee("Amy", Set.of("Skill"), null, null, null);
+        employee.setTargetShiftCategoryCounts(Map.of("EVENING", 4));
+        employee.setTargetShiftCategoryCountsSeverity("SOFT");
+
+        constraintVerifier.verifyThat(EmployeeSchedulingConstraintProvider::goalShiftCategoryCountPerEmployeeSoftZero)
+                .given(employee,
+                        new Shift("0", DAY_START_TIME, DAY_END_TIME, "Location", "Skill", "MORNING", employee),
+                        new Shift("1", AFTERNOON_START_TIME, AFTERNOON_END_TIME, "Location", "Skill", "EVENING", employee))
+                .penalizesBy(3);
     }
 
     @Test

@@ -1,6 +1,7 @@
 package org.acme.employeescheduling.domain;
 
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -20,6 +21,8 @@ public class Employee {
 
     private Integer targetShiftsPerWeek;
     private String targetShiftsPerWeekSeverity; // "NONE", "SOFT", "MEDIUM", or "HARD"
+    private Map<String, Integer> targetShiftCategoryCounts;
+    private String targetShiftCategoryCountsSeverity; // "NONE", "SOFT", "MEDIUM", or "HARD"
 
     public Employee() {
 
@@ -104,6 +107,22 @@ public class Employee {
 
     public void setTargetShiftsPerWeekSeverity(String targetShiftsPerWeekSeverity) {
         this.targetShiftsPerWeekSeverity = targetShiftsPerWeekSeverity;
+    }
+
+    public Map<String, Integer> getTargetShiftCategoryCounts() {
+        return targetShiftCategoryCounts;
+    }
+
+    public void setTargetShiftCategoryCounts(Map<String, Integer> targetShiftCategoryCounts) {
+        this.targetShiftCategoryCounts = targetShiftCategoryCounts;
+    }
+
+    public String getTargetShiftCategoryCountsSeverity() {
+        return targetShiftCategoryCountsSeverity;
+    }
+
+    public void setTargetShiftCategoryCountsSeverity(String targetShiftCategoryCountsSeverity) {
+        this.targetShiftCategoryCountsSeverity = targetShiftCategoryCountsSeverity;
     }
 
     @Override
