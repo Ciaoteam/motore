@@ -1,19 +1,5 @@
-# Maven and Gradle files
-target
-build
-bin
-
-# Eclipse, Netbeans and IntelliJ files
-.*
-!/.github
-!/.ci
-!/.mvn
-!.gitignore
-!.gitattributes
-/nbproject
-*.ipr
-*.iws
-*.iml
-
-# Repository wide ignore mac DS_Store files
-.DS_Store
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.ruff_cache/

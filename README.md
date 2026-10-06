@@ -1,232 +1,241 @@
-<p align="center">
-  <a href="https://solver.timefold.ai">
-    <img src="/timefold-solver-logo.png" width="400px"  alt="Timefold Solver" />
-  </a>
-</p>
-
-[![GitHub Discussions](https://img.shields.io/github/discussions/TimefoldAI/timefold-solver?style=for-the-badge&logo=github)](https://github.com/TimefoldAI/timefold-solver/discussions)
-
-This repository contains quickstarts for [Timefold Solver](https://github.com/TimefoldAI/timefold-solver), an AI constraint solver for Java and Kotlin. 
-It shows different use cases and basic implementations to get you started on your optimization journey.
-
-## Overview
-
-| Use Case                                                                | Notable Solver Concepts                                  |
-|-------------------------------------------------------------------------|----------------------------------------------------------|
-| 🚚 <a href="#-vehicle-routing">Vehicle Routing</a>                      | Chained Through Time, Shadow Variables                   |
-| 🧑 <a href="#-employee-scheduling">Employee Scheduling</a>              | Load Balancing                                           |
-| 🛠️ <a href="#-maintenance-scheduling">Maintenance Scheduling</a>       | TimeGrain, Shadow Variable, Variable Listener            |
-| 📦 <a href="#-food-packaging">Food Packaging</a>                        | Mixed Model, Shadow Variables, Pinning                   |
-| 🛒 <a href="#-order-picking">Order Picking</a>                          | Chained Planning Variable, Shadow Variables              |
-| 🏫 <a href="#-school-timetabling">School Timetabling</a>                | Timeslot                                                 |
-| 🏭 <a href="#-facility-location-problem">Facility Location Problem</a>  | Shadow Variable                                          |
-| 🎤 <a href="#-conference-scheduling">Conference Scheduling</a>          | Timeslot, Justifications                                 |
-| 🛏️ <a href="#-bed-allocation-scheduling">Bed Allocation Scheduling</a> | Allows Unassigned                                        |
-| 🛫 <a href="#-flight-crew-scheduling">Flight Crew Scheduling</a>        |                                                          |
-| 👥 <a href="#-meeting-scheduling">Meeting Scheduling</a>                | TimeGrain                                                |
-| ✅ <a href="#-task-assigning">Task Assigning</a>                         | Bendable Score, Chained Through Time, Allows Unassigned  |
-| 📆 <a href="#-project-job-scheduling">Project Job Scheduling</a>        | Shadow Variables, Variable Listener, Strenght Comparator |
-| 🏆 <a href="#-sports-league-scheduling">Sports League Scheduling</a>    | Consecutive Sequences                                    |
-| 🏅 <a href="#-tournament-scheduling">Tournament Scheduling</a>          | Pinning, Load Balancing                                  |
-
-> [!NOTE]
-> The implementations in this repository serve as a starting point and/or inspiration when creating your own application.
-> Timefold Solver is a library and does not include a UI. To illustrate these use cases a rudimentary UI is included in these quickstarts.
-
-## Getting started implementations
-
-Our website contains several getting started guides. All of them build the <a href="#-school-timetabling">School Timetabling</a> use case.
-You can find the resulting projects for each of the guides in the `getting started` folder.
-
-- [Service](getting-started/service) (Java, Maven, Quarkus)
-- [Library: Core](getting-started/hello-world) (Java, Maven)
-- [Library: Quarkus Integration](getting-started/quarkus-integration) (Java, Maven, Quarkus)
-- [Library: Quarkus Integration](getting-started/quarkus-integration-kotlin) (Kotlin, Maven, Quarkus)
-- [Library: Spring Boot Integration](getting-started/spring-boot-integration/README.md) (Java, Maven, Spring)
-
-## Use cases
-
-### 🚚 Vehicle Routing
-
-Find the most efficient routes for vehicles to reach visits, considering vehicle capacity and time windows when visits are available. Sometimes also called "CVRPTW".
-
-![Vehicle Routing Screenshot](use-cases/vehicle-routing/vehicle-routing-screenshot.png)
-
-- [View constraints](use-cases/vehicle-routing/README.md#constraints)
-- [Run quarkus-vehicle-routing](use-cases/vehicle-routing/README.md) (Java, Maven, Quarkus)
-
-> [!TIP]
->  <img src="https://docs.timefold.ai/_/img/models/field-service-routing.svg" align="right" width="50px" /> [Check out our off-the-shelf model for Field Service Routing](https://app.timefold.ai/models/field-service-routing). This model goes beyond basic Vehicle Routing and supports additional constraints such as priorities, skills, fairness and more.
-
----
-
-### 🧑 Employee Scheduling
-
-Schedule shifts to employees, accounting for employee availability and shift skill requirements.
-
-![Employee Scheduling Screenshot](use-cases/employee-scheduling/employee-scheduling-screenshot.png)
-
-- [View constraints](use-cases/employee-scheduling/README.md#constraints)
-- [Run quarkus-employee-scheduling](use-cases/employee-scheduling/README.md) (Java, Maven, Quarkus)
-
-> [!TIP]
->  <img src="https://docs.timefold.ai/_/img/models/employee-shift-scheduling.svg" align="right" width="50px" /> [Check out our off-the-shelf model for Employee Shift Scheduling](https://app.timefold.ai/models/employee-scheduling). This model supports many additional constraints such as skills, pairing employees, fairness and more.
-
----
-
-### 🛠 Maintenance Scheduling
-
-Schedule maintenance jobs to crews over time to reduce both premature and overdue maintenance.
-
-![Maintenance Scheduling Screenshot](use-cases/maintenance-scheduling/maintenance-scheduling-screenshot.png)
-
-- [View constraints](use-cases/maintenance-scheduling/README.md#constraints)
-- [Run quarkus-maintenance-scheduling](use-cases/maintenance-scheduling/README.md) (Java, Maven, Quarkus)
-
----
-
-### 📦 Food Packaging
-
-Schedule food packaging orders to manufacturing lines to minimize downtime and fulfill all orders on time.
-
-![Food Packaging Screenshot](use-cases/food-packaging/food-packaging-screenshot.png)
-
-- [View constraints](use-cases/food-packaging/README.md#constraints)
-- [Run quarkus-food-packaging](use-cases/food-packaging/README.md) (Java, Maven, Quarkus)
-
----
-
-### 🛒 Order Picking
-
-Generate an optimal picking plan for completing a set of orders.
-
-![Order Picking Screenshot](use-cases/order-picking/order-picking-screenshot.png)
-
-- [View constraints](use-cases/order-picking/README.md#constraints)
-- [Run quarkus-order-picking](use-cases/order-picking/README.md) (Java, Maven, Quarkus)
-
----
-
-### 🏫 School Timetabling
-
-Assign lessons to timeslots and rooms to produce a better schedule for teachers and students.
-
-![School Timetabling Screenshot](use-cases/school-timetabling/school-timetabling-screenshot.png)
-
-- [View constraints](use-cases/school-timetabling/README.md#constraints)
-- [Run quarkus-school-timetabling](use-cases/school-timetabling/README.md) (Java, Maven or Gradle, Quarkus)
-- [Run spring-boot-integration](getting-started/spring-boot-integration/README.md) (Java, Maven or Gradle, Spring Boot)
-- [Run quarkus-integration-kotlin](getting-started/quarkus-integration-kotlin/README.md) (Kotlin, Maven, Quarkus)
-
-Without a UI:
-
-- [Service / REST API](getting-started/service) (Java, Maven, Quarkus)
-- [Library / Console Application](getting-started/hello-world/README.md) (Java, Maven or Gradle)
-
----
-
-### 🏭 Facility Location Problem
-
-Pick the best geographical locations for new stores, distribution centers, COVID test centers, or telecom masts.
-
-![Facility Location Screenshot](use-cases/facility-location/facility-location-screenshot.png)
-
-- [View constraints](use-cases/facility-location/README.md#constraints)
-- [Run quarkus-facility-location](use-cases/facility-location/README.md) (Java, Maven, Quarkus)
-
----
-
-### 🎤 Conference Scheduling
-
-Assign conference talks to timeslots and rooms to produce a better schedule for speakers.
-
-![Conference Scheduling Screenshot](use-cases/conference-scheduling/conference-scheduling-screenshot.png)
-
-- [View constraints](use-cases/conference-scheduling/README.md#constraints)
-- [Run quarkus-conference-scheduling](use-cases/conference-scheduling/README.md) (Java, Maven, Quarkus)
-
----
-
-### 🛏️ Bed Allocation Scheduling
-
-Assign beds to patient stays to produce a better schedule for hospitals.
-
-![Bed Scheduling Screenshot](use-cases/bed-allocation/bed-allocation-screenshot.png)
-
-- [View constraints](use-cases/bed-allocation/README.md#constraints)
-- [Run quarkus-bed-allocation-scheduling](use-cases/bed-allocation/README.md) (Java, Maven, Quarkus)
-
----
-
-### 🛫 Flight Crew Scheduling
-
-Assign crew to flights to produce a better schedule for flight assignments.
-
-![Flight Crew Scheduling Screenshot](use-cases/flight-crew-scheduling/flight-crew-scheduling-screenshot.png)
-
-- [View constraints](use-cases/flight-crew-scheduling/README.md#constraints)
-- [Run quarkus-flight-crew-scheduling](use-cases/flight-crew-scheduling/README.md) (Java, Maven, Quarkus)
-
----
-
-### 👥 Meeting Scheduling
-
-Assign timeslots and rooms for meetings to produce a better schedule.
-
-![Meeting Scheduling Screenshot](use-cases/meeting-scheduling/meeting-scheduling-screenshot.png)
-
-- [View constraints](use-cases/meeting-scheduling/README.md#constraints)
-- [Run quarkus-meeting-scheduling](use-cases/meeting-scheduling/README.md) (Java, Maven, Quarkus)
-
----
-
-### ✅ Task Assigning
-
-Assign employees to tasks to produce a better plan for task assignments.
-
-![Task Assigning Screenshot](use-cases/task-assigning/task-assigning-screenshot.png)
-
-- [View constraints](use-cases/task-assigning/README.md#constraints)
-- [Run quarkus-task-assigning](use-cases/task-assigning/README.md) (Java, Maven, Quarkus)
-
----
-
-### 📆 Project Job Scheduling
-
-Assign jobs for execution to produce a better schedule for project job allocations.
-
-![Project Job Scheduling Screenshot](use-cases/project-job-scheduling/project-job-scheduling-screenshot.png)
-
-- [View constraints](use-cases/project-job-scheduling/README.md#constraints)
-- [Run quarkus-project-job-scheduling](use-cases/project-job-scheduling/README.md) (Java, Maven, Quarkus)
-
----
-
-### 🏆 Sports League Scheduling
-
-Assign rounds to matches to produce a better schedule for league matches.
-
-![Sports League Scheduling Screenshot](use-cases/sports-league-scheduling/sports-league-scheduling-screenshot.png)
-
-- [View constraints](use-cases/sports-league-scheduling/README.md#constraints)
-- [Run quarkus-sports-league-scheduling](use-cases/sports-league-scheduling/README.md) (Java, Maven, Quarkus)
-
----
-
-### 🏅 Tournament Scheduling
-
-Tournament Scheduling service assigning teams to tournament matches.
-
-![Tournament Scheduling Screenshot](use-cases/tournament-scheduling/tournament-scheduling-screenshot.png)
-
-- [View constraints](use-cases/tournament-scheduling/README.md#constraints)
-- [Run quarkus-tournament-scheduling](use-cases/tournament-scheduling/README.md) (Java, Maven, Quarkus)
-
----
-
-## Legal notice
-
-Timefold Quickstarts was [forked](https://timefold.ai/blog/2023/optaplanner-fork/) on 20 April 2023 from OptaPlanner Quickstarts, which was entirely Apache-2.0 licensed (a permissive license).
-
-Timefold Quickstarts is a derivative work of OptaPlanner Quickstarts, which includes copyrights of the original creator, Red Hat Inc., affiliates, and contributors, that were all entirely licensed under the Apache-2.0 license. 
-Every source file has been modified.
+# Ciao Team — motore turni (FastAPI + OR-Tools)
+
+Il motore è **fisso**: tutto ciò che cambia arriva nella richiesta API.
+Persone e disponibilità, fabbisogno (anche "dal 1° gennaio un cameriere in più"),
+turni esistenti (confermati, congelati, proposti) e **le regole come codice
+Python** (vibecoding del titolare e, nei loro limiti, dei dipendenti).
+
+Una regola nuova, anche bizzarra, non richiede modifiche al motore: è un pezzo
+di codice in più nella richiesta. La versione precedente (Timefold, Java) è nel
+branch e nel tag `timefold-archive`.
+
+## Flusso complessivo
+
+```
+messaggio ──► Lovable: parser AI ──► dati strutturati + codice delle regole ──► motore
+                   calendario UI ◄── stessi dati strutturati ◄──────────────────┘
+```
+
+1. **Fabbisogno.** Regole con validità (`requirement_rules`) + eccezioni per data
+   (`requirements`). `POST /requirements/resolve` restituisce il fabbisogno
+   effettivo giorno per giorno: lo usano il parser (per capire "sera" = quali
+   fasce) e il calendario.
+2. **Memoria del titolare.** Ogni frase diventa una `CodeRule` (codice Python +
+   frase originale in `label`). Prima di salvarla l'app la prova con
+   `POST /rules/validate`: se il codice è sbagliato torna l'errore da correggere.
+   `about` dice chi riguarda: una sola persona = regola personale.
+3. **Disponibilità prima della generazione.** Il dipendente la manda liberamente;
+   l'app la salva come finestre (`availability` / `unavailable`) e chiama subito
+   `POST /availability/check`. Si verificano **solo le regole personali** di quella
+   persona ("Marco solo mattine", "Marco 5 turni"), non quelle di coppia o generali
+   ("Marco mai con Marta" la risolve il motore in generazione). Con
+   `compatible=false` l'app apre un punto in sospeso al titolare con `conflicts`.
+   `unmatched_windows` = finestre che non toccano nessuna fascia del fabbisogno, da
+   chiarire. Se è il titolare a modificare la disponibilità, l'app avvisa il
+   dipendente (dopo la conferma del titolare sul testo).
+4. **Generazione.** `POST /solve` (o `/jobs` in background) con tutto: persone,
+   fabbisogno, turni esistenti, regole. Risposta: assegnazioni (con `fixed`,
+   `status`, `ref`), posti scoperti, posti a rischio (congelati/proposti),
+   violazioni delle regole, regole scartate per errore, riepilogo per persona.
+5. **Dopo la generazione.** Il dipendente non cambia più la disponibilità
+   liberamente: la richiesta diventa un punto in sospeso che il titolare approva.
+   Se approvata, i turni incompatibili diventano `frozen` (posto riservato, non
+   copertura certa) finché il titolare decide. Per sostituirli c'è
+   `POST /gaps/candidates`. Un turno che il titolare vorrebbe dare a qualcuno, in
+   attesa del suo sì, è `proposed`.
+6. **Buchi e disponibilità aggiuntiva.** Fabbisogno aumentato, assenze,
+   generazione incompleta: `POST /gaps/candidates` con il calendario attuale come
+   `fixed_assignments`. Per ogni buco i candidati sono ordinati: prima chi è già
+   disponibile (si assegna), poi chi resta nei suoi limiti, poi chi ha lavorato
+   meno. Per ognuno, le regole personali che violerebbe. `candidate_filter` sceglie
+   a chi chiedere: ruoli, persone, solo tappabuchi o solo dipendenti normali.
+7. **Rigenerare solo alcuni giorni.** `plan_dates`: il fabbisogno degli altri giorni
+   non entra, i loro turni restano come contesto (ore, riposi, regole).
+
+## API
+
+| Metodo | Percorso | A cosa serve |
+|---|---|---|
+| GET | `/health` | stato del servizio (senza chiave) |
+| POST | `/solve` | genera e risponde a calcolo finito |
+| POST | `/jobs` → GET `/jobs/{id}` | come `/solve`, in background (job tenuti un'ora) |
+| POST | `/availability/check` | disponibilità di una persona contro le sue regole personali |
+| POST | `/gaps/candidates` | buchi e posti a rischio, con chi potrebbe coprirli |
+| POST | `/requirements/resolve` | fabbisogno effettivo per data |
+| POST | `/rules/validate` | prova le regole senza generare |
+
+Schemi completi e prova interattiva su `/docs`. Se è impostata la variabile
+`API_KEY`, ogni chiamata (salvo `/health`) vuole `x-api-key: <chiave>` oppure
+`Authorization: Bearer <chiave>`.
+
+### Esempio minimo
+
+```json
+{
+  "week_start": "2026-12-28",
+  "employees": [
+    {"id": "marco", "name": "Marco Rossi", "roles": ["Cameriere"], "skills": ["Responsabile"],
+     "availability": [{"date": "2026-12-28"}, {"date": "2026-12-29", "start": "17:00", "end": "23:59"}]},
+    {"id": "marta", "name": "Marta Bianchi", "roles": ["Cameriere"], "max_shifts_per_day": 1}
+  ],
+  "requirement_rules": [
+    {"role": "Cameriere", "start": "19:00", "end": "23:00", "headcount": 2},
+    {"role": "Cameriere", "start": "19:00", "end": "23:00", "mode": "add", "headcount": 1, "valid_from": "2027-01-01"}
+  ],
+  "fixed_assignments": [
+    {"employee_id": "marta", "date": "2026-12-28", "start": "19:00", "end": "23:00", "role": "Cameriere",
+     "status": "frozen", "ref": "turno-123"}
+  ],
+  "rules": [
+    {"id": "m-mattine", "label": "Marco solo mattine", "about": ["marco"],
+     "code": "hard(works('Marco', category=EVENING) == 0)"}
+  ]
+}
+```
+
+### Regole sempre attive (fatti, non preferenze)
+
+- il ruolo del turno è fra i ruoli della persona; la competenza "required" è posseduta;
+- il turno è interamente dentro `availability` (null = sempre disponibile, `[]` = mai) e fuori da `unavailable`;
+- niente turni sovrapposti, salvo `allow_overlap` (per tutti in `settings` o per persona);
+- riposo minimo **fra una giornata e la successiva** (`min_rest_minutes`, per tutti o per persona); pranzo e cena dello stesso giorno non ne sono soggetti;
+- al massimo `max_shifts_per_day` turni al giorno (default 2 = spezzato ammesso, con una piccola penalità; 1 per chi non lo fa);
+- i turni esistenti restano alla loro persona; `auto_assign: false` (tappabuchi) = mai assegnato dal motore.
+
+Se le regole `hard` non stanno insieme, il motore risolve di nuovo trattandole
+come preferenze fortissime: `relaxed_hard: true`, e `violations` dice quali non è
+riuscito a rispettare.
+
+## Libreria delle regole
+
+Il codice di una regola è Python, ma solo un sottoinsieme sicuro: niente
+`import`, `def`/`class`/`lambda`, `while`, `try`/`with`, niente nomi o attributi che
+iniziano con `_`, niente `format`, al massimo 200.000 passi. Ogni regola viene
+provata prima su un modello di prova: se fallisce non tocca il calcolo e finisce in
+`rule_errors`. Builtins ammessi: `len sum min max abs any all sorted enumerate zip
+list set dict tuple int round str bool range date timedelta`.
+
+**Dati:** `shifts` (posti: `id date start end role skill category minutes weekday
+fixed status held_by`), `employees` (`id name roles skills hourly_cost_cents
+auto_assign`), `dates` (giorni pianificati), `week_start`, `MORNING`, `EVENING`.
+
+**Filtri** (in tutte le funzioni che li accettano): `date`, `dates`, `days`
+(0=lunedì … 6=domenica), `start`/`end` (fascia: conta il turno che la tocca),
+`role`, `skill` (competenza richiesta dal turno), `category`, `status`.
+
+**Persone:** un id, un nome ("Marco"), `emp("Marco")`, una lista, oppure niente = tutti.
+
+| Funzione | Restituisce |
+|---|---|
+| `emp(chi)`, `employees_where(role=, skill=)`, `shifts_where(**filtri)` | persone / posti |
+| `works(chi, **filtri)` | numero di turni assegnati |
+| `minutes(chi, **filtri)`, `cost(chi, **filtri)` | minuti lavorati, costo in centesimi |
+| `works_on(chi, giorno, **filtri)` | 1 se lavora quel giorno (nella fascia) |
+| `days_worked(chi, **filtri)` | giorni con almeno un turno |
+| `together(a, b, **filtri)` | turni sovrapposti fatti insieme |
+| `assigned(posto, chi)`, `covered(posto)` | 0/1 |
+| `new_bool()`, `new_int(lo, hi)` | variabili libere |
+| `any_of(lista)`, `all_of(lista)`, `max_of(lista)`, `min_of(lista)`, `abs_of(expr)` | combinazioni |
+| `hard(cond, msg)`, `soft(cond, peso, msg)` | obbligo / preferenza |
+| `hard_if(quando, cond, msg)`, `soft_if(quando, cond, peso, msg)` | obbligo / preferenza condizionata |
+| `prefer(expr, peso)`, `avoid(expr, peso)` | più alto è meglio / peggio |
+| `balance(lista, peso)` | avvicina i valori (equità) |
+| `max_streak(chi, n, msg, weight=None, already=0)` | al massimo n giorni di fila |
+
+### Esempi (frase del titolare → codice)
+
+```python
+# "Marco solo mattine"
+hard(works("Marco", category=EVENING) == 0)
+
+# "Giulia fa 2 mattine e 3 sere"
+hard(works("Giulia", category=MORNING) == 2)
+hard(works("Giulia", category=EVENING) == 3)
+
+# "Marco almeno 30 ore (se si può), mai più di 40"
+soft(minutes("Marco") >= 30 * 60, 40, "Marco sotto le 30 ore")
+hard(minutes("Marco") <= 40 * 60)
+
+# "Marco e Marta mai insieme"; "il nuovo sempre con un senior"
+hard(together("Marco", "Marta") == 0)
+hard(together("Nuovo", "Anna") + together("Nuovo", "Paolo") >= works("Nuovo"))
+
+# "a cena sempre almeno un responsabile in sala"
+for d in dates:
+    hard(works(employees_where(skill="Responsabile"), date=d, start="19:00", end="23:00") >= 1)
+
+# "massimo 2 domeniche al mese per Giorgia" (ne ha già fatta 1)
+hard(days_worked("Giorgia", days=[6]) <= 2 - 1)
+
+# "un giorno libero a settimana per tutti" / "mai più di 5 giorni di fila"
+for e in employees:
+    hard(days_worked(e) <= 6)
+max_streak(None, 5)
+
+# "se Marco chiude il venerdì, il sabato non apre"
+chiude = works_on("Marco", week_start + timedelta(days=4), start="22:00", end="23:59")
+hard_if(chiude, works("Marco", date=week_start + timedelta(days=5), category=MORNING) == 0)
+
+# "weekend distribuiti in modo equo, contando chi ne ha fatti di più il mese scorso"
+storico = {"marco": 3, "marta": 1, "luca": 2}
+balance([works(e, days=[5, 6]) + storico.get(e.id, 0) for e in employees], 30)
+
+# "budget personale della settimana 4.000 €"
+hard(cost() <= 400000)
+```
+
+**Regole dei dipendenti** (`author: "employee"`): vedono e vincolano solo i propri
+turni (`me`), non possono usare `together`, e le loro condizioni sono preferenze
+con peso massimo 50 finché il titolare non le approva (`approved: true`).
+
+```python
+# "il lunedì preferirei riposare"
+soft(works(me, days=[0]) == 0, 30)
+```
+
+## Casi coperti (bar / ristorante)
+
+| Situazione | Come |
+|---|---|
+| Fabbisogno stagionale, eventi, "dal 1° gennaio +1" | `requirement_rules` con `valid_from`/`valid_to`, `mode: add` |
+| Serata speciale, chiusura per ferie o festività | eccezione in `requirements` (`set` 0 oppure `add`) |
+| Picchi orari (12-14 in quattro, 14-15 in due) | più fasce nel fabbisogno |
+| Spezzato pranzo + cena, chi non lo fa | `max_shifts_per_day` |
+| Turni dopo mezzanotte | fine ≤ inizio = giorno dopo |
+| Riposo fra giornate, diverso per persona | `min_rest_minutes` |
+| Part-time, ore min/max, straordinari, budget | `minutes`, `cost` |
+| Minori o apprendisti (niente notte, massimo ore al giorno) | `works(..., start=, end=)`, `minutes(..., date=)` |
+| Giorno libero settimanale, giorni di fila | `days_worked`, `max_streak` |
+| Responsabile o chiavi sempre presenti | `works(employees_where(skill=...), ...)` |
+| Affiancamento o incompatibilità | `together` |
+| Equità su weekend, chiusure, domeniche (anche con lo storico) | `balance` |
+| Limiti mensili | costanti nel codice (già fatto nel mese) |
+| Disponibilità parziale, ferie, malattia | `availability`, `unavailable` |
+| Tappabuchi o personale a chiamata | `auto_assign: false` + `/gaps/candidates` |
+| Turni messi a mano, congelati, proposti | `fixed_assignments.status` |
+| Rifare solo alcuni giorni | `plan_dates` |
+| Malattia dell'ultimo minuto, buchi | `/gaps/candidates` |
+
+**Non ancora supportato:** turni a orario flessibile, dove il motore sceglie anche
+l'orario d'inizio (oggi le fasce le dà il fabbisogno), e sedi distinte (si può
+rappresentare la sede nel ruolo, es. "Cameriere Centro").
+
+## Sviluppo locale
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest -q
+.venv/bin/uvicorn app.main:app --reload
+```
+
+Con Docker:
+
+```bash
+docker build -t ciaoteam-motore . && docker run --rm -p 8000:8000 -e API_KEY=prova ciaoteam-motore
+```
+
+## Deploy su Railway
+
+`Dockerfile` nella radice; `railway.json` imposta il controllo di salute su
+`/health`. Variabili: `API_KEY` (consigliata), `SOLVER_WORKERS` (job in parallelo,
+default 2). Railway passa la porta in `PORT`.
