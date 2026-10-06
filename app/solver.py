@@ -687,6 +687,13 @@ def _build_and_solve(req: SolveRequest, ctx: _Ctx, *, relax_hard: bool, check_mo
     # solo le regole eseguite per intero (CP-SAT non toglie i vincoli già
     # aggiunti, quindi una regola che fallisce a metà non deve mai toccarlo).
     usable, errors, _counts = _probe_rules(req, ctx)
+    # Competenza "preferibile" del fabbisogno: chi non la possiede costa un po'.
+    for (i, e), v in x.items():
+        sh = ctx.shifts[i]
+        if sh.required_skill and sh.skill_strength == "preferred" and not sh.pinned:
+            if sh.required_skill not in {_norm(k) for k in ctx.emp_by_id[e].skills}:
+                penalties.append((v, st.preferred_skill_weight))
+
     conds: list[_Cond] = []
     day_cache: dict = {}
     for rule in usable:

@@ -275,3 +275,12 @@ def test_buchi_con_candidati_filtrati_e_limiti_segnalati():
         "requirements": [need(MON)], "candidate_filter": {"auto_assign": False},
     }))
     assert [c.employee_id for c in only_extra.gaps[0].candidates] == ["extra"]
+
+
+def test_competenza_preferibile_premia_chi_la_possiede():
+    r = solve(req(
+        employees=[emp("anna"), emp("bea", skills=["Responsabile"])],
+        requirements=[need(MON, required_skill="Responsabile", skill_strength="preferred")],
+        settings={"fairness_weight": 0},
+    ))
+    assert r.assignments[0].employee_id == "bea"

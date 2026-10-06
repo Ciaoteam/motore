@@ -138,6 +138,10 @@ class Settings(BaseModel):
         default=30, ge=0, le=100000, description="Penalità per ogni secondo turno nella stessa giornata."
     )
     allow_overlap: bool = Field(default=False, description="true = turni sovrapposti ammessi per tutti.")
+    preferred_skill_weight: int = Field(
+        default=30, ge=0, le=100000,
+        description="Penalità per un posto con competenza preferibile coperto da chi non la possiede.",
+    )
     category_cutoff: HHMM = Field(default="14:00", description="Mattina se il turno inizia prima di quest'ora.")
     fairness_weight: int = Field(default=2, ge=0, le=1000, description="Quanto bilanciare i turni fra le persone.")
     coverage_weight: int = Field(default=1000, ge=1, description="Valore di ogni turno coperto.")
