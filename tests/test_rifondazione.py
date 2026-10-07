@@ -216,3 +216,20 @@ balance([works(e) + 0 for e in employees], 5)
     days = sorted(str(a.date) for a in r.assignments if a.employee_id == "luca")
     assert len(days) == 5 and "2026-12-22" not in days
     assert ("2026-12-21" not in days) or ("2026-12-23" not in days)
+
+
+def test_ore_della_scheda_per_settimana_su_due_settimane():
+    # Come le genera l'app: una regola per settimana con validità (max 10 ore).
+    rules = []
+    for ws, we in (("2026-12-21", "2026-12-27"), ("2026-12-28", "2027-01-03")):
+        for e in ("anna", "bea"):
+            rules.append({"id": f"scheda:max:{e}:{ws}", "label": "max", "code": f'hard(minutes("{e}") <= 600, "{e} oltre")',
+                          "about": [e], "valid_from": ws, "valid_to": we})
+    r = solve(SolveRequest.model_validate({
+        "week_start": MON, "horizon_days": 14, "time_limit_seconds": 10,
+        "employees": [emp("anna"), emp("bea")], "requirement_rules": GRID, "rules": rules,
+    }))
+    for ws, we in (("2026-12-21", "2026-12-27"), ("2026-12-28", "2027-01-03")):
+        for e in ("anna", "bea"):
+            n = sum(1 for a in r.assignments if a.employee_id == e and ws <= str(a.date) <= we)
+            assert n == 2, (e, ws, n)
