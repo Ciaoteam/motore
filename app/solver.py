@@ -31,6 +31,7 @@ from typing import Optional
 
 from ortools.sat.python import cp_model
 
+from . import calendar_it
 from . import rules as sandbox
 from .models import (
     Assignment,
@@ -39,6 +40,14 @@ from .models import (
     CodeRule,
     Employee,
     EmployeeSummary,
+    Event,
+    NeedRule,
+    OpenSlot,
+    Requirement,
+    RequirementsPreviewRequest,
+    RequirementsPreviewResponse,
+    ScheduleCheckRequest,
+    ScheduleCheckResponse,
     Gap,
     GapCandidate,
     GapCandidatesRequest,
@@ -122,6 +131,8 @@ class _Ctx:
     emp_by_id: dict[str, Employee]
     eligible: dict[tuple[int, str], bool] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    history: list["_Shift"] = field(default_factory=list)
+    need_errors: list = field(default_factory=list)
 
     @property
     def emp_ids(self) -> list[str]:
@@ -143,13 +154,20 @@ def _slot_key(d: date, start: str, end: str, role: str) -> tuple:
 
 
 def resolve_requirements(week_start: Optional[date], horizon_days: int, requirement_rules, requirements) -> list[dict]:
+    return resolve_with_code(week_start, horizon_days, requirement_rules, requirements)[0]
+
+
+def resolve_with_code(week_start: Optional[date], horizon_days: int, requirement_rules, requirements,
+                      need_rules=(), events=()) -> tuple[list[dict], list]:
     """Fabbisogno effettivo per data, fascia e ruolo.
 
     Ordine: regole "set" attive quel giorno (vince quella con valid_from più
-    recente), poi regole "add" attive, poi eccezioni della singola data ("set"
-    sostituisce, "add" somma). Mai sotto zero.
+    recente), poi regole "add" attive, poi il fabbisogno calcolato da codice
+    (need_rules, nell'ordine ricevuto), poi le eccezioni della singola data
+    ("set" sostituisce, "add" somma). Mai sotto zero.
     """
     slots: dict[tuple, dict] = {}
+    errors: list = []
 
     def apply(d: date, n) -> None:
         key = _slot_key(d, n.start, n.end, n.role)
@@ -179,16 +197,135 @@ def resolve_requirements(week_start: Optional[date], horizon_days: int, requirem
             for r in active:
                 if r.mode == "add":
                     apply(d, r)
+    if need_rules and week_start is not None:
+        dates = [week_start + timedelta(days=k) for k in range(horizon_days)]
+        for nr in need_rules:
+            ops: list = []
+            try:
+                sandbox.run(nr.code, _NeedApi(nr, dates, list(events), slots, ops).build())
+            except Exception as exc:  # noqa: BLE001 — una regola sbagliata non tocca il fabbisogno
+                errors.append(_rule_error(nr, exc))
+                continue
+            for op in ops:
+                op(apply)
     for r in requirements:
         apply(r.date, r)
     out = [{**v, "headcount": max(0, v["headcount"])} for v in slots.values()]
-    return sorted(out, key=lambda v: (v["date"], v["start"], v["role"]))
+    return sorted(out, key=lambda v: (v["date"], v["start"], v["role"])), errors
+
+
+class SlotView:
+    """Una fascia del fabbisogno già calcolata, in sola lettura (per base())."""
+
+    def __init__(self, v: dict):
+        self.date, self.start, self.end, self.role = v["date"], v["start"], v["end"], v["role"]
+        self.headcount, self.skill = v["headcount"], v["required_skill"]
+
+    def __repr__(self) -> str:
+        return f"<fascia {self.date} {self.start}-{self.end} {self.role} x{self.headcount}>"
+
+
+class EventView:
+    """Un evento del calendario del locale, in sola lettura."""
+
+    def __init__(self, e: Event):
+        self.id, self.date, self.start, self.end = e.id, e.date, e.start, e.end
+        self.kind, self.title, self.note = (e.kind or "evento").strip().casefold(), e.title or "", e.note or ""
+        self.guests = e.guests or 0
+        self.weekday = e.date.weekday()
+
+    def __repr__(self) -> str:
+        return f"<evento {self.date} {self.kind} {self.title}>"
+
+
+def _span(start: Optional[str], end: Optional[str]) -> tuple[int, int]:
+    if start is None:
+        return 0, DAY
+    a, b = _hm(start), _hm(end)
+    return (a, b + DAY) if b <= a else (a, b)
+
+
+def ceil_div(a: int, b: int) -> int:
+    """Divisione arrotondata per eccesso: ceil_div(30, 15) = 2, ceil_div(31, 15) = 3."""
+    if b == 0:
+        raise sandbox.RuleRejected("ceil_div: divisione per zero")
+    return -((-int(a)) // int(b))
+
+
+CALENDAR_API = {
+    "is_holiday": calendar_it.is_holiday,
+    "holiday_name": calendar_it.holiday_name,
+    "easter": calendar_it.easter,
+    "week_of_month": calendar_it.week_of_month,
+    "is_last_of_month": calendar_it.is_last_of_month,
+    "month_start": calendar_it.month_start,
+    "month_end": calendar_it.month_end,
+    "ceil_div": ceil_div,
+}
+
+
+class _NeedApi:
+    """Libreria del fabbisogno calcolato. Le modifiche si applicano solo se la
+    regola arriva in fondo senza errori (buffer `ops`)."""
+
+    def __init__(self, rule: NeedRule, dates: list[date], events: list[Event], slots: dict, ops: list):
+        vf, vt = rule.valid_from, rule.valid_to
+        self.dates = [d for d in dates if (vf is None or d >= vf) and (vt is None or d <= vt)]
+        self._active = set(self.dates)
+        self.events = [EventView(e) for e in events if e.date in set(dates)]
+        self.slots, self.ops = slots, ops
+
+    def need(self, day, start, end, role, n, skill=None, skill_n=1, strength="required", mode="add", priority=1):
+        """Aggiunge (mode="add") o fissa (mode="set") n persone di un ruolo in una fascia di quel giorno."""
+        if not isinstance(day, date):
+            raise sandbox.RuleRejected("need(): il primo argomento è una data (es. un elemento di dates o e.date)")
+        r = Requirement.model_validate(dict(
+            date=day, start=start, end=end, role=role, headcount=int(n), mode=mode, required_skill=skill,
+            skill_headcount=int(skill_n), skill_strength=strength, priority=int(priority),
+        ))
+        if day in self._active:
+            self.ops.append(lambda apply, r=r: apply(r.date, r))
+
+    def close(self, day, start=None, end=None, role=None):
+        """Nessuno serve in quel giorno (o in quella fascia, o per quel ruolo): chiusura, ferie del locale."""
+        if not isinstance(day, date):
+            raise sandbox.RuleRejected("close(): il primo argomento è una data")
+        if (start is None) != (end is None):
+            raise sandbox.RuleRejected("close(): start ed end vanno indicati insieme")
+        win = _span(start, end)
+        if day not in self._active:
+            return
+
+        def op(_apply, day=day, win=win, role=role):
+            for v in self.slots.values():
+                if v["date"] != day or (role is not None and _norm(v["role"]) != _norm(role)):
+                    continue
+                if _overlaps(_span(v["start"], v["end"]), win):
+                    v["headcount"] = 0
+        self.ops.append(op)
+
+    def base(self, day, role=None) -> list[SlotView]:
+        """Le fasce già calcolate per quel giorno (griglia e regole precedenti)."""
+        return [SlotView(v) for v in self.slots.values()
+                if v["date"] == day and (role is None or _norm(v["role"]) == _norm(role))]
+
+    def events_on(self, day) -> list[EventView]:
+        return [e for e in self.events if e.date == day]
+
+    def build(self) -> dict:
+        api = {"dates": list(self.dates), "week_start": self.dates[0] if self.dates else None,
+               "events": list(self.events), **CALENDAR_API}
+        for name in ("need", "close", "base", "events_on"):
+            api[name] = getattr(self, name)
+        return api
 
 
 def _prepare(req: SolveRequest) -> _Ctx:
     plan = set(req.plan_dates) if req.plan_dates else None
     raw: list[dict] = []
-    for r in resolve_requirements(req.week_start, req.horizon_days, req.requirement_rules, req.requirements):
+    resolved, need_errors = resolve_with_code(req.week_start, req.horizon_days, req.requirement_rules,
+                                              req.requirements, req.need_rules, req.events)
+    for r in resolved:
         if plan is not None and r["date"] not in plan:
             continue
         with_skill = min(r["skill_headcount"], r["headcount"]) if r["required_skill"] else 0
@@ -226,17 +363,27 @@ def _prepare(req: SolveRequest) -> _Ctx:
         plan_dates = sorted({s["date"] for s in raw})
     cutoff = _hm(req.settings.category_cutoff)
     ctx = _Ctx(base=base, plan_dates=plan_dates, shifts=[], employees=list(req.employees),
-               emp_by_id={e.id: e for e in req.employees})
-    for s in raw:
+               emp_by_id={e.id: e for e in req.employees}, need_errors=need_errors)
+
+    def make(s: dict) -> _Shift:
         a = (s["date"] - base).days * DAY + _hm(s["start"])
         b = (s["date"] - base).days * DAY + _hm(s["end"])
-        ctx.shifts.append(_Shift(
+        return _Shift(
             id=s["id"], date=s["date"], start=a, end=b + DAY if b <= a else b, start_label=s["start"],
             end_label=s["end"], role_label=s["role"], role=_norm(s["role"]), skill_label=s["skill"],
             required_skill=_norm(s["skill"]) if s["skill"] else None, skill_strength=s["strength"],
             pinned=s["pinned"], fixed=s["fixed"], priority=s["priority"], status=s["status"], ref=s["ref"],
             category="MORNING" if _hm(s["start"]) < cutoff else "EVENING",
-        ))
+        )
+
+    for s in raw:
+        ctx.shifts.append(make(s))
+    for k, h in enumerate(req.history):
+        ctx.history.append(make(dict(
+            id=f"hist:{h.ref or k + 1}", date=h.date, start=h.start, end=h.end, role=h.role,
+            skill=h.required_skill, strength="required", pinned=h.employee_id, fixed=True, priority=1,
+            status=h.status, ref=h.ref,
+        )))
 
     for e in req.employees:
         roles = {_norm(r) for r in e.roles}
@@ -324,6 +471,10 @@ class _RuleApi:
         self.views = [ShiftView(s) for s in ctx.shifts]
         self.emps = {e.id: EmployeeView(e) for e in ctx.employees}
         self._day_cache = day_cache
+        # Validità della regola: vede solo i giorni (e i turni) del suo periodo.
+        vf, vt = rule.valid_from, rule.valid_to
+        self.active_dates = [d for d in ctx.plan_dates if (vf is None or d >= vf) and (vt is None or d <= vt)]
+        self._valid = None if (vf is None and vt is None) else set(self.active_dates)
 
     # ── persone e filtri ──
     def _emp_id(self, who) -> str:
@@ -359,7 +510,9 @@ class _RuleApi:
             raise sandbox.RuleRejected("start ed end vanno indicati insieme")
         return kw
 
-    def _match(self, s: _Shift, f: dict) -> bool:
+    def _match(self, s: _Shift, f: dict, validity: bool = True) -> bool:
+        if validity and self._valid is not None and s.date not in self._valid:
+            return False
         if f.get("date") is not None and s.date != f["date"]:
             return False
         if f.get("dates") is not None and s.date not in set(f["dates"]):
@@ -442,9 +595,32 @@ class _RuleApi:
                 self._day_cache[key] = w
         return self._day_cache[key]
 
+    def can_work(self, who=None, **kw):
+        """Quanti posti potrebbe prendere (ruolo, competenza, disponibilità): per non chiedere l'impossibile."""
+        f = self._filters(kw)
+        return sum(len(self._vars(e, f)) for e in self._many(who))
+
+    # ── storico (turni già lavorati prima del periodo) ──
+    def _past(self, who, since, until, kw) -> list[_Shift]:
+        f = self._filters(kw)
+        ids = set(self._many(who))
+        return [h for h in self.ctx.history
+                if h.pinned in ids and (since is None or h.date >= since) and (until is None or h.date <= until)
+                and self._match(h, f, validity=False)]
+
+    def past(self, who=None, since=None, until=None, **kw) -> int:
+        """Turni già lavorati (storico), con gli stessi filtri di works()."""
+        return len(self._past(who, since, until, kw))
+
+    def past_minutes(self, who=None, since=None, until=None, **kw) -> int:
+        return sum(h.minutes for h in self._past(who, since, until, kw))
+
+    def past_days(self, who=None, since=None, until=None, **kw) -> int:
+        return len({h.date for h in self._past(who, since, until, kw)})
+
     def days_worked(self, who=None, **kw):
         f = self._filters(kw)
-        days = list(self.ctx.plan_dates)
+        days = list(self.active_dates)
         if f.get("days") is not None:
             days = [d for d in days if d.weekday() in set(f["days"])]
         if f.get("dates") is not None:
@@ -587,7 +763,7 @@ class _RuleApi:
 
     def max_streak(self, who, n: int, msg: Optional[str] = None, weight: Optional[int] = None, already: int = 0):
         """Al massimo n giorni lavorati di fila (already = giorni di fila già fatti prima del periodo)."""
-        days = list(self.ctx.plan_dates)
+        days = list(self.active_dates)
         for e in self._many(who):
             worked = [self.works_on(e, d) for d in days]
             seq = [1] * min(already, n + 1) + worked
@@ -601,17 +777,18 @@ class _RuleApi:
 
     def build(self) -> dict:
         api = {
-            "shifts": list(self.views),
+            "shifts": [v for v, s in zip(self.views, self.ctx.shifts) if self._valid is None or s.date in self._valid],
             "employees": [self.emps[e] for e in self._many(None)],
-            "dates": list(self.ctx.plan_dates),
+            "dates": list(self.active_dates),
             "week_start": self.ctx.plan_dates[0] if self.ctx.plan_dates else None,
             "MORNING": "MORNING",
             "EVENING": "EVENING",
+            **CALENDAR_API,
         }
         for name in ("emp", "shifts_where", "employees_where", "assigned", "covered", "works", "works_on",
                      "days_worked", "minutes", "cost", "new_bool", "new_int", "any_of", "all_of", "max_of",
                      "min_of", "abs_of", "hard", "soft", "hard_if", "soft_if", "prefer", "avoid", "balance",
-                     "max_streak"):
+                     "max_streak", "can_work", "past", "past_minutes", "past_days"):
             api[name] = getattr(self, name)
         if self.me is None:
             api["together"] = self.together
@@ -688,6 +865,7 @@ def _build_and_solve(req: SolveRequest, ctx: _Ctx, *, relax_hard: bool, check_mo
     # solo le regole eseguite per intero (CP-SAT non toglie i vincoli già
     # aggiunti, quindi una regola che fallisce a metà non deve mai toccarlo).
     usable, errors, _counts = _probe_rules(req, ctx)
+    errors = list(ctx.need_errors) + errors
     # Competenza "preferibile" del fabbisogno: chi non la possiede costa un po'.
     for (i, e), v in x.items():
         sh = ctx.shifts[i]
@@ -818,8 +996,11 @@ def _probe_rules(req: SolveRequest, ctx: _Ctx) -> tuple[list[CodeRule], list[Rul
 def validate_rules(req: RulesValidateRequest) -> RulesValidateResponse:
     sreq = SolveRequest(week_start=req.week_start, horizon_days=req.horizon_days, employees=req.employees,
                         requirement_rules=req.requirement_rules, requirements=req.requirements,
+                        need_rules=req.need_rules, events=req.events, history=req.history,
                         fixed_assignments=req.fixed_assignments, rules=req.rules, time_limit_seconds=1)
-    _ok, errors, counts = _probe_rules(sreq, _prepare(sreq))
+    ctx = _prepare(sreq)
+    _ok, errors, counts = _probe_rules(sreq, ctx)
+    errors = list(ctx.need_errors) + errors
     return RulesValidateResponse(ok=not errors, rule_errors=errors, conditions=counts)
 
 
@@ -838,7 +1019,8 @@ def check_availability(req: AvailabilityCheckRequest) -> AvailabilityCheckRespon
     incompatibile con le aspettative del titolare."""
     emp = req.employee.model_copy(update={"auto_assign": True})
     base = dict(week_start=req.week_start, horizon_days=req.horizon_days, employees=[emp],
-                requirement_rules=req.requirement_rules, requirements=req.requirements, time_limit_seconds=10)
+                requirement_rules=req.requirement_rules, requirements=req.requirements,
+                need_rules=req.need_rules, events=req.events, history=req.history, time_limit_seconds=10)
     sreq = SolveRequest(**base, rules=personal_rules(req.rules, emp.id),
                         settings=req.settings.model_copy(update={"coverage_weight": 1, "fairness_weight": 0}))
     ctx = _prepare(sreq)
@@ -881,7 +1063,8 @@ def gap_candidates(req: GapCandidatesRequest) -> GapCandidatesResponse:
     visibili in would_exceed."""
     sreq = SolveRequest(week_start=req.week_start, horizon_days=req.horizon_days, settings=req.settings,
                         employees=req.employees, requirement_rules=req.requirement_rules,
-                        requirements=req.requirements, fixed_assignments=req.fixed_assignments)
+                        requirements=req.requirements, need_rules=req.need_rules, events=req.events,
+                        fixed_assignments=req.fixed_assignments)
     ctx = _prepare(sreq)
     st, flt = req.settings, req.candidate_filter
     current: dict[str, list[_Shift]] = defaultdict(list)
@@ -959,7 +1142,7 @@ def _personal_breaks(req: GapCandidatesRequest, emp: Employee, mine: list[_Shift
                   required_skill=o.skill_label) for o in mine + [gap]]
     sreq = SolveRequest(week_start=req.week_start, horizon_days=req.horizon_days, settings=req.settings,
                         employees=[emp.model_copy(update={"auto_assign": False})], fixed_assignments=fixed,
-                        rules=rules, time_limit_seconds=2)
+                        history=req.history, rules=rules, time_limit_seconds=2)
     ctx = _prepare(sreq)
     _solver, status, *_ = _build_and_solve(sreq, ctx, relax_hard=False, time_limit=2)
     if status != cp_model.INFEASIBLE:
@@ -968,3 +1151,53 @@ def _personal_breaks(req: GapCandidatesRequest, emp: Employee, mine: list[_Shift
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return ["regole personali"]
     return [v.detail for v in _violations(solver, conds) if v.severity == "hard"]
+
+
+# ── Anteprima del fabbisogno (con codice ed eventi) ─────────────────────────
+
+
+def preview_requirements(req: RequirementsPreviewRequest) -> RequirementsPreviewResponse:
+    out, errors = resolve_with_code(req.week_start, req.horizon_days, req.requirement_rules, req.requirements,
+                                    req.need_rules, req.events)
+    return RequirementsPreviewResponse(
+        requirements=[ResolvedRequirement(**{k: v for k, v in r.items() if k != "priority"}) for r in out],
+        rule_errors=errors,
+    )
+
+
+# ── Controllo del calendario così com'è ─────────────────────────────────────
+
+
+def check_schedule(req: ScheduleCheckRequest) -> ScheduleCheckResponse:
+    """Nessuna assegnazione nuova: i turni esistenti contro regole e fabbisogno."""
+    sreq = SolveRequest(week_start=req.week_start, horizon_days=req.horizon_days, settings=req.settings,
+                        employees=req.employees, requirement_rules=req.requirement_rules,
+                        requirements=req.requirements, need_rules=req.need_rules, events=req.events,
+                        fixed_assignments=req.fixed_assignments, history=req.history, rules=req.rules,
+                        time_limit_seconds=5)
+    ctx = _prepare(sreq)
+    for k in ctx.eligible:
+        ctx.eligible[k] = False  # solo i turni esistenti: nessuno viene assegnato
+    solver, status, _x, conds, errors = _build_and_solve(sreq, ctx, relax_hard=True, time_limit=5)
+    violations = _violations(solver, conds) if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else []
+    groups: dict[tuple, int] = {}
+    for sh in ctx.shifts:
+        if sh.pinned is None and sh.date in set(ctx.plan_dates):
+            key = (sh.date, sh.start_label, sh.end_label, sh.role_label, sh.skill_label)
+            groups[key] = groups.get(key, 0) + 1
+    summary = []
+    for e in ctx.emp_ids:
+        mine = [sh for sh in ctx.shifts if sh.pinned == e and sh.date in set(ctx.plan_dates)]
+        summary.append(EmployeeSummary(
+            employee_id=e, shifts=len(mine), minutes=sum(sh.minutes for sh in mine),
+            morning=sum(1 for sh in mine if sh.category == "MORNING"),
+            evening=sum(1 for sh in mine if sh.category == "EVENING"),
+        ))
+    return ScheduleCheckResponse(
+        violations=violations,
+        rule_errors=errors,
+        open_slots=[OpenSlot(date=k[0], start=k[1], end=k[2], role=k[3], required_skill=k[4], missing=n)
+                    for k, n in sorted(groups.items())],
+        employees=summary,
+        warnings=list(dict.fromkeys(ctx.warnings)),
+    )

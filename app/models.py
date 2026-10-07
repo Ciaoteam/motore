@@ -171,11 +171,46 @@ class CodeRule(BaseModel):
         default=False,
         description="Per author=employee: true = il titolare l'ha approvata (allora hard vale come hard).",
     )
+    valid_from: Optional[date] = Field(
+        default=None, description="La regola vale da questa data inclusa (filtra date e turni che vede)."
+    )
+    valid_to: Optional[date] = Field(default=None, description="La regola vale fino a questa data inclusa.")
 
     @model_validator(mode="after")
     def _employee_author(self) -> "CodeRule":
         if self.author == "employee" and not self.author_employee_id:
             raise ValueError("una regola scritta da un dipendente richiede author_employee_id")
+        return self
+
+
+class NeedRule(BaseModel):
+    """Fabbisogno calcolato da codice Python: eventi, stagioni, festivi, chiusure.
+    Gira dopo `requirement_rules` e prima delle eccezioni per data (`requirements`).
+    Libreria: need(), close(), base(), events, dates, is_holiday(), ... (README)."""
+
+    id: str
+    label: str
+    code: str = Field(max_length=8000)
+    valid_from: Optional[date] = None
+    valid_to: Optional[date] = None
+
+
+class Event(BaseModel):
+    """Un fatto del calendario del locale: evento con ospiti, chiusura, serata speciale."""
+
+    id: Optional[str] = None
+    date: date
+    start: Optional[HHMM] = None
+    end: Optional[HHMM] = None
+    kind: str = Field(default="evento", description="evento | chiusura | festivo | altro (testo libero).")
+    title: Optional[str] = None
+    guests: Optional[int] = Field(default=None, ge=0, le=100000)
+    note: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _both_or_none(self) -> "Event":
+        if (self.start is None) != (self.end is None):
+            raise ValueError("start ed end vanno indicati insieme (o nessuno dei due)")
         return self
 
 
@@ -200,6 +235,12 @@ class SolveRequest(BaseModel):
         default_factory=list, description="Turni esistenti da tenere: occupano il posto del fabbisogno."
     )
     rules: list[CodeRule] = Field(default_factory=list, description="Vincoli come codice Python.")
+    need_rules: list[NeedRule] = Field(default_factory=list, description="Fabbisogno calcolato da codice Python.")
+    events: list[Event] = Field(default_factory=list, description="Eventi e chiusure (dati per need_rules).")
+    history: list[FixedAssignment] = Field(
+        default_factory=list,
+        description="Turni già lavorati prima del periodo (sola lettura, per past()/limiti del mese).",
+    )
 
     @model_validator(mode="after")
     def _rules_need_week(self) -> "SolveRequest":
@@ -292,6 +333,9 @@ class AvailabilityCheckRequest(BaseModel):
     rules: list[CodeRule] = Field(
         default_factory=list, description="Si applicano solo le regole personali di questa persona (about=[lei])."
     )
+    need_rules: list[NeedRule] = Field(default_factory=list)
+    events: list[Event] = Field(default_factory=list)
+    history: list[FixedAssignment] = Field(default_factory=list)
 
 
 class SlotRef(BaseModel):
@@ -332,6 +376,18 @@ class RequirementsResolveRequest(BaseModel):
     requirements: list[Requirement] = Field(default_factory=list)
 
 
+class RequirementsPreviewRequest(RequirementsResolveRequest):
+    """Come /requirements/resolve, con il fabbisogno calcolato da codice e gli eventi."""
+
+    need_rules: list[NeedRule] = Field(default_factory=list)
+    events: list[Event] = Field(default_factory=list)
+
+
+class RequirementsPreviewResponse(BaseModel):
+    requirements: list[ResolvedRequirement]
+    rule_errors: list[RuleError] = Field(default_factory=list)
+
+
 # ── Buchi e richiesta di disponibilità aggiuntiva ───────────────────────────
 
 
@@ -358,6 +414,9 @@ class GapCandidatesRequest(BaseModel):
     rules: list[CodeRule] = Field(
         default_factory=list, description="Si usano le regole personali hard dei candidati (limiti da segnalare)."
     )
+    need_rules: list[NeedRule] = Field(default_factory=list)
+    events: list[Event] = Field(default_factory=list)
+    history: list[FixedAssignment] = Field(default_factory=list)
     candidate_filter: CandidateFilter = Field(default_factory=CandidateFilter)
     max_candidates: int = Field(default=5, ge=1, le=50)
     include_past: bool = Field(default=False, description="false = ignora i buchi prima di `today`.")
@@ -404,10 +463,50 @@ class RulesValidateRequest(BaseModel):
     requirement_rules: list[RequirementRule] = Field(default_factory=list)
     requirements: list[Requirement] = Field(default_factory=list)
     fixed_assignments: list[FixedAssignment] = Field(default_factory=list)
-    rules: list[CodeRule]
+    rules: list[CodeRule] = Field(default_factory=list)
+    need_rules: list[NeedRule] = Field(default_factory=list)
+    events: list[Event] = Field(default_factory=list)
+    history: list[FixedAssignment] = Field(default_factory=list)
 
 
 class RulesValidateResponse(BaseModel):
     ok: bool
     rule_errors: list[RuleError]
     conditions: dict[str, int] = Field(description="Quante condizioni ha generato ogni regola valida.")
+
+
+# ── Controllo del calendario attuale ────────────────────────────────────────
+
+
+class ScheduleCheckRequest(BaseModel):
+    """Il calendario così com'è (fixed_assignments) contro regole e fabbisogno:
+    nessuna assegnazione nuova, solo violazioni e posti scoperti."""
+
+    week_start: date
+    horizon_days: int = Field(default=7, ge=1, le=31)
+    settings: Settings = Field(default_factory=Settings)
+    employees: list[Employee]
+    requirement_rules: list[RequirementRule] = Field(default_factory=list)
+    requirements: list[Requirement] = Field(default_factory=list)
+    need_rules: list[NeedRule] = Field(default_factory=list)
+    events: list[Event] = Field(default_factory=list)
+    fixed_assignments: list[FixedAssignment] = Field(default_factory=list)
+    history: list[FixedAssignment] = Field(default_factory=list)
+    rules: list[CodeRule] = Field(default_factory=list)
+
+
+class OpenSlot(BaseModel):
+    date: date
+    start: str
+    end: str
+    role: str
+    required_skill: Optional[str] = None
+    missing: int
+
+
+class ScheduleCheckResponse(BaseModel):
+    violations: list[Violation]
+    rule_errors: list[RuleError] = Field(default_factory=list)
+    open_slots: list[OpenSlot] = Field(description="Posti del fabbisogno senza nessuno.")
+    employees: list[EmployeeSummary]
+    warnings: list[str] = Field(default_factory=list)

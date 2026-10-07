@@ -1,0 +1,199 @@
+"""Fabbisogno da codice, eventi, festivi, storico, validità delle regole, controllo del calendario."""
+
+from datetime import date
+
+from fastapi.testclient import TestClient
+
+from app.calendar_it import easter, holiday_name, is_last_of_month, week_of_month
+from app.main import app
+from app.models import (
+    RequirementsPreviewRequest,
+    RulesValidateRequest,
+    ScheduleCheckRequest,
+    SolveRequest,
+)
+from app.solver import check_schedule, preview_requirements, solve, validate_rules
+
+MON = "2026-12-21"  # lunedì; venerdì 25 è Natale
+GRID = [{"role": "Sala", "start": "18:00", "end": "23:00", "headcount": 1}]
+
+
+def emp(id_, roles=("Sala",), **kw):
+    return {"id": id_, "name": id_.capitalize(), "roles": list(roles), **kw}
+
+
+def need_rule(id_, code, **kw):
+    return {"id": id_, "label": id_, "code": code, **kw}
+
+
+def preview(**kw):
+    base = {"week_start": MON, "requirement_rules": GRID}
+    base.update(kw)
+    return preview_requirements(RequirementsPreviewRequest.model_validate(base))
+
+
+def heads(res, d, start="18:00", role="Sala"):
+    return sum(r.headcount for r in res.requirements if str(r.date) == d and r.start == start and r.role == role)
+
+
+# ── calendario ──────────────────────────────────────────────────────────────
+
+
+def test_festivi_italiani():
+    assert easter(2027) == date(2027, 3, 28)
+    assert holiday_name(date(2027, 3, 29)) == "Pasquetta"
+    assert holiday_name(date(2026, 12, 25)) == "Natale"
+    assert holiday_name(date(2026, 12, 22)) is None
+    assert week_of_month(date(2026, 12, 4)) == 1 and week_of_month(date(2026, 12, 25)) == 4
+    assert is_last_of_month(date(2026, 12, 25)) and not is_last_of_month(date(2026, 12, 18))
+
+
+# ── fabbisogno da codice ────────────────────────────────────────────────────
+
+
+def test_un_cameriere_ogni_15_ospiti_per_gli_eventi():
+    code = """
+for e in events:
+    if e.kind == "evento" and e.guests:
+        need(e.date, e.start or "18:00", e.end or "23:00", "Sala", ceil_div(e.guests, 15))
+"""
+    res = preview(need_rules=[need_rule("eventi", code)],
+                  events=[{"date": "2026-12-22", "start": "18:00", "end": "23:00", "guests": 30, "title": "Cena"}])
+    assert res.rule_errors == []
+    assert heads(res, "2026-12-22") == 3  # 1 della griglia + 2 per 30 ospiti
+    assert heads(res, "2026-12-23") == 1
+
+
+def test_chiuso_nei_festivi_e_per_le_chiusure():
+    code = """
+for d in dates:
+    if is_holiday(d):
+        close(d)
+for e in events:
+    if e.kind == "chiusura":
+        close(e.date)
+"""
+    res = preview(need_rules=[need_rule("chiusure", code)], events=[{"date": "2026-12-23", "kind": "chiusura"}])
+    assert heads(res, "2026-12-25") == 0
+    assert heads(res, "2026-12-23") == 0
+    assert heads(res, "2026-12-24") == 1
+
+
+def test_validita_stagionale_e_set():
+    code = 'for d in dates:\n    need(d, "12:00", "15:00", "Sala", 2, mode="set")'
+    res = preview(need_rules=[need_rule("estate", code, valid_from="2026-12-24")])
+    assert heads(res, "2026-12-23", "12:00") == 0
+    assert heads(res, "2026-12-24", "12:00") == 2
+
+
+def test_eccezione_per_data_vince_sul_codice():
+    code = 'for d in dates:\n    need(d, "18:00", "23:00", "Sala", 1)'
+    res = preview(need_rules=[need_rule("piu-uno", code)],
+                  requirements=[{"date": "2026-12-22", "start": "18:00", "end": "23:00", "role": "Sala",
+                                 "headcount": 5, "mode": "set"}])
+    assert heads(res, "2026-12-21") == 2
+    assert heads(res, "2026-12-22") == 5
+
+
+def test_regola_di_fabbisogno_sbagliata_non_tocca_nulla():
+    code = 'need(dates[0], "18:00", "23:00", "Sala", 3)\nx = 1 / 0'
+    res = preview(need_rules=[need_rule("rotta", code)])
+    assert len(res.rule_errors) == 1 and res.rule_errors[0].rule_id == "rotta"
+    assert heads(res, "2026-12-21") == 1
+
+
+def test_base_legge_la_griglia():
+    code = """
+for d in dates:
+    for f in base(d, "Sala"):
+        if d.weekday() == 5:
+            need(d, f.start, f.end, "Sala", f.headcount)
+"""
+    res = preview(need_rules=[need_rule("sabato-doppio", code)])
+    assert heads(res, "2026-12-26") == 2 and heads(res, "2026-12-24") == 1
+
+
+def test_solve_usa_il_fabbisogno_da_codice_e_riporta_gli_errori():
+    r = solve(SolveRequest.model_validate({
+        "week_start": MON, "horizon_days": 1, "time_limit_seconds": 5,
+        "employees": [emp("anna"), emp("bea")], "requirement_rules": GRID,
+        "need_rules": [need_rule("piu-uno", 'need(dates[0], "18:00", "23:00", "Sala", 1)'),
+                       need_rule("rotta", "x = nome_che_non_esiste")],
+    }))
+    assert len([a for a in r.assignments if a.employee_id]) == 2
+    assert [e.rule_id for e in r.rule_errors] == ["rotta"]
+
+
+# ── storico e validità ──────────────────────────────────────────────────────
+
+
+def test_massimo_due_domeniche_al_mese_con_lo_storico():
+    code = 'hard(past("anna", since=month_start(week_start), days=[6]) + days_worked("anna", days=[6]) <= 2)'
+    history = [{"employee_id": "anna", "date": d, "start": "18:00", "end": "23:00", "role": "Sala"}
+               for d in ("2026-12-06", "2026-12-13")]
+    r = solve(SolveRequest.model_validate({
+        "week_start": MON, "time_limit_seconds": 5, "employees": [emp("anna")], "requirement_rules": GRID,
+        "history": history, "rules": [{"id": "dom", "label": "max 2 domeniche", "code": code, "about": ["anna"]}],
+    }))
+    sunday = [a for a in r.assignments if str(a.date) == "2026-12-27"]
+    assert sunday and sunday[0].employee_id is None
+    assert r.violations == []
+
+
+def test_regola_con_validita_vede_solo_i_suoi_giorni():
+    # "Anna non lavora" solo da giovedì: lunedì-mercoledì resta assegnabile.
+    code = 'hard(works("anna") == 0)'
+    r = solve(SolveRequest.model_validate({
+        "week_start": MON, "time_limit_seconds": 5, "employees": [emp("anna")], "requirement_rules": GRID,
+        "rules": [{"id": "x", "label": "x", "code": code, "about": ["anna"], "valid_from": "2026-12-24"}],
+    }))
+    worked = sorted(str(a.date) for a in r.assignments if a.employee_id == "anna")
+    assert worked == ["2026-12-21", "2026-12-22", "2026-12-23"]
+
+
+def test_can_work_per_minimi_raggiungibili():
+    # Anna vorrebbe 5 turni ma è disponibile solo 2 sere: il minimo si adatta e non rompe il resto.
+    code = 'hard(works("anna") >= min(5, can_work("anna")))'
+    r = solve(SolveRequest.model_validate({
+        "week_start": MON, "time_limit_seconds": 5,
+        "employees": [emp("anna", availability=[{"date": "2026-12-21"}, {"date": "2026-12-22"}]), emp("bea")],
+        "requirement_rules": GRID,
+        "rules": [{"id": "min", "label": "min", "code": code, "about": ["anna"]}],
+    }))
+    assert not r.relaxed_hard
+    assert len([a for a in r.assignments if a.employee_id == "anna"]) == 2
+
+
+def test_validate_controlla_anche_il_fabbisogno():
+    res = validate_rules(RulesValidateRequest.model_validate({
+        "week_start": MON, "employees": [emp("anna")], "requirement_rules": GRID,
+        "need_rules": [need_rule("rotta", "need(1, 2)")],
+    }))
+    assert not res.ok and res.rule_errors[0].rule_id == "rotta"
+
+
+# ── controllo del calendario attuale ────────────────────────────────────────
+
+
+def test_controllo_calendario_violazioni_e_buchi():
+    fixed = [{"employee_id": "anna", "date": "2026-12-21", "start": "18:00", "end": "23:00", "role": "Sala"},
+             {"employee_id": "anna", "date": "2026-12-22", "start": "18:00", "end": "23:00", "role": "Sala"}]
+    res = check_schedule(ScheduleCheckRequest.model_validate({
+        "week_start": MON, "horizon_days": 3, "employees": [emp("anna"), emp("bea")],
+        "requirement_rules": GRID, "fixed_assignments": fixed,
+        "rules": [{"id": "uno", "label": "Anna al massimo 1 turno", "code": 'hard(works("anna") <= 1)',
+                   "about": ["anna"]}],
+    }))
+    assert [v.rule_id for v in res.violations] == ["uno"]
+    assert [(str(o.date), o.missing) for o in res.open_slots] == [("2026-12-23", 1)]
+    anna = next(e for e in res.employees if e.employee_id == "anna")
+    assert anna.shifts == 2
+
+
+def test_api_nuove_rispondono():
+    client = TestClient(app)
+    r = client.post("/requirements/preview", json={"week_start": MON, "requirement_rules": GRID})
+    assert r.status_code == 200 and len(r.json()["requirements"]) == 7
+    r = client.post("/schedule/check", json={"week_start": MON, "employees": [emp("anna")],
+                                             "requirement_rules": GRID})
+    assert r.status_code == 200 and len(r.json()["open_slots"]) == 7

@@ -26,8 +26,12 @@ from .models import (
     AvailabilityCheckResponse,
     GapCandidatesRequest,
     GapCandidatesResponse,
+    RequirementsPreviewRequest,
+    RequirementsPreviewResponse,
     RequirementsResolveRequest,
     ResolvedRequirement,
+    ScheduleCheckRequest,
+    ScheduleCheckResponse,
     RulesValidateRequest,
     RulesValidateResponse,
     SolveRequest,
@@ -162,3 +166,18 @@ def requirements_resolve(req: RequirementsResolveRequest) -> list[ResolvedRequir
 def rules_validate(req: RulesValidateRequest) -> RulesValidateResponse:
     """Prova le regole Python senza generare: per correggerle prima di salvarle."""
     return solver.validate_rules(req)
+
+
+@app.post("/requirements/preview", response_model=RequirementsPreviewResponse, dependencies=[Depends(require_key)])
+def requirements_preview(req: RequirementsPreviewRequest) -> RequirementsPreviewResponse:
+    """Fabbisogno effettivo con le regole di fabbisogno in Python e gli eventi, più gli errori delle regole."""
+    return solver.preview_requirements(req)
+
+
+@app.post("/schedule/check", response_model=ScheduleCheckResponse, dependencies=[Depends(require_key)])
+def schedule_check(req: ScheduleCheckRequest) -> ScheduleCheckResponse:
+    """Il calendario così com'è contro regole e fabbisogno: violazioni e posti scoperti, nessuna assegnazione."""
+    try:
+        return solver.check_schedule(req)
+    finally:
+        _release_memory()

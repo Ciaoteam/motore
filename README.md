@@ -62,7 +62,9 @@ messaggio ──► Lovable: parser AI ──► dati strutturati + codice delle
 | POST | `/availability/check` | disponibilità di una persona contro le sue regole personali |
 | POST | `/gaps/candidates` | buchi e posti a rischio, con chi potrebbe coprirli |
 | POST | `/requirements/resolve` | fabbisogno effettivo per data |
-| POST | `/rules/validate` | prova le regole senza generare |
+| POST | `/rules/validate` | prova le regole (anche di fabbisogno) senza generare |
+| POST | `/requirements/preview` | fabbisogno effettivo con regole di fabbisogno in Python ed eventi, più gli errori |
+| POST | `/schedule/check` | il calendario così com'è contro regole e fabbisogno: violazioni e posti scoperti |
 
 Schemi completi e prova interattiva su `/docs`. Se è impostata la variabile
 `API_KEY`, ogni chiamata (salvo `/health`) vuole `x-api-key: <chiave>` oppure
@@ -182,6 +184,57 @@ balance([works(e, days=[5, 6]) + storico.get(e.id, 0) for e in employees], 30)
 
 # "budget personale della settimana 4.000 €"
 hard(cost() <= 400000)
+```
+
+**Validità:** `valid_from` / `valid_to` su una regola le fanno vedere solo i giorni (e i
+turni) del suo periodo: `dates`, `shifts`, `works()`, `days_worked()`… sono già filtrati.
+
+**Storico** (`history`: turni già lavorati prima del periodo, sola lettura):
+`past(chi, since=, until=, **filtri)`, `past_minutes(...)`, `past_days(...)`.
+**Altro:** `can_work(chi, **filtri)` = quanti posti potrebbe prendere (per non
+chiedere l'impossibile), `is_holiday(d)`, `holiday_name(d)`, `easter(anno)`,
+`week_of_month(d)`, `is_last_of_month(d)`, `month_start(d)`, `month_end(d)`,
+`ceil_div(a, b)`.
+
+```python
+# "massimo 2 domeniche al mese per Giorgia" (con lo storico del mese)
+hard(past("Giorgia", since=month_start(week_start), days=[6]) + days_worked("Giorgia", days=[6]) <= 2)
+
+# "Marco almeno 4 turni, se la disponibilità lo permette"
+hard(works("Marco") >= min(4, can_work("Marco")))
+```
+
+### Fabbisogno in Python (`need_rules`)
+
+Girano dopo `requirement_rules` e prima delle eccezioni per data. Vedono `dates`,
+`week_start`, `events` (`date start end kind title guests note weekday`), le
+funzioni del calendario qui sopra e:
+
+| Funzione | Effetto |
+|---|---|
+| `need(giorno, inizio, fine, ruolo, n, skill=None, skill_n=1, strength="required", mode="add")` | n persone in più (`add`) o in tutto (`set`) |
+| `close(giorno, start=None, end=None, role=None)` | nessuno serve (tutto il giorno, una fascia, un ruolo) |
+| `base(giorno, ruolo=None)` | fasce già calcolate (`start end role headcount skill`) |
+| `events_on(giorno)` | eventi di quel giorno |
+
+Una regola che fallisce non tocca nulla (le modifiche si applicano solo a fine
+regola) e finisce in `rule_errors`.
+
+```python
+# "quando ho gli eventi mi serve 1 cameriere ogni 15 persone"
+for e in events:
+    if e.kind == "evento" and e.guests:
+        need(e.date, e.start or "19:00", e.end or "23:00", "Sala", ceil_div(e.guests, 15))
+
+# "nei festivi siamo chiusi"
+for d in dates:
+    if is_holiday(d):
+        close(d)
+
+# "il primo venerdì del mese inventario: uno in più la mattina"
+for d in dates:
+    if d.weekday() == 4 and week_of_month(d) == 1:
+        need(d, "08:00", "12:00", "Magazzino", 1)
 ```
 
 **Regole dei dipendenti** (`author: "employee"`): vedono e vincolano solo i propri
