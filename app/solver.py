@@ -653,9 +653,18 @@ class _RuleApi:
             raise sandbox.RuleRejected("limiti di new_int fuori intervallo")
         return self.model.NewIntVar(lo, hi, "")
 
+    def _var(self, e):
+        """Un'espressione come variabile: OR-Tools sbaglia min/max/abs su
+        espressioni con costante (es. 1 - x), quindi passano sempre da qui."""
+        if isinstance(e, cp_model.IntVar):
+            return e
+        v = self.model.NewIntVar(-MAX_INT, MAX_INT, "")
+        self.model.Add(v == e)
+        return v
+
     def any_of(self, items):
         """Vale 1 se almeno uno degli elementi (0/1) vale 1."""
-        lits = [i for i in items if not isinstance(i, int)]
+        lits = [self._var(i) for i in items if not isinstance(i, int)]
         if any(isinstance(i, int) and i for i in items):
             return 1
         if not lits:
@@ -668,7 +677,7 @@ class _RuleApi:
         """Vale 1 se tutti gli elementi (0/1) valgono 1."""
         if any(isinstance(i, int) and not i for i in items):
             return 0
-        lits = [i for i in items if not isinstance(i, int)]
+        lits = [self._var(i) for i in items if not isinstance(i, int)]
         if not lits:
             return 1
         b = self.model.NewBoolVar("")
@@ -680,7 +689,7 @@ class _RuleApi:
         if not items:
             return 0
         v = self.model.NewIntVar(-MAX_INT, MAX_INT, "")
-        self.model.AddMaxEquality(v, items)
+        self.model.AddMaxEquality(v, [i if isinstance(i, int) else self._var(i) for i in items])
         return v
 
     def min_of(self, items):
@@ -688,12 +697,12 @@ class _RuleApi:
         if not items:
             return 0
         v = self.model.NewIntVar(-MAX_INT, MAX_INT, "")
-        self.model.AddMinEquality(v, items)
+        self.model.AddMinEquality(v, [i if isinstance(i, int) else self._var(i) for i in items])
         return v
 
     def abs_of(self, expr):
         v = self.model.NewIntVar(0, MAX_INT, "")
-        self.model.AddAbsEquality(v, expr)
+        self.model.AddAbsEquality(v, expr if isinstance(expr, int) else self._var(expr))
         return v
 
     # ── condizioni ──

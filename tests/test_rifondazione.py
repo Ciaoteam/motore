@@ -197,3 +197,22 @@ def test_api_nuove_rispondono():
     r = client.post("/schedule/check", json={"week_start": MON, "employees": [emp("anna")],
                                              "requirement_rules": GRID})
     assert r.status_code == 200 and len(r.json()["open_slots"]) == 7
+
+
+def test_alternativa_due_giorni_liberi_e_combinazioni_con_costanti():
+    # any_of/all_of su espressioni "1 - x": OR-Tools da solo darebbe un modello impossibile.
+    code = """
+a = all_of([1 - works_on("luca", week_start), 1 - works_on("luca", week_start + timedelta(days=1))])
+b = all_of([1 - works_on("luca", week_start + timedelta(days=1)), 1 - works_on("luca", week_start + timedelta(days=2))])
+hard(any_of([a, b]) == 1)
+hard(works("luca") == min(5, can_work("luca")))
+balance([works(e) + 0 for e in employees], 5)
+"""
+    r = solve(SolveRequest.model_validate({
+        "week_start": MON, "time_limit_seconds": 5, "employees": [emp("luca"), emp("bea")],
+        "requirement_rules": GRID, "rules": [{"id": "alt", "label": "alt", "code": code, "about": ["luca"]}],
+    }))
+    assert r.status == "OPTIMAL" and not r.relaxed_hard
+    days = sorted(str(a.date) for a in r.assignments if a.employee_id == "luca")
+    assert len(days) == 5 and "2026-12-22" not in days
+    assert ("2026-12-21" not in days) or ("2026-12-23" not in days)
