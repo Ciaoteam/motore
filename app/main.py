@@ -7,6 +7,8 @@ l'header `x-api-key: <API_KEY>` oppure `Authorization: Bearer <API_KEY>`.
 
 from __future__ import annotations
 
+import ctypes
+import gc
 import os
 import secrets
 import threading
@@ -39,7 +41,10 @@ app = FastAPI(
     "(codice Python in sandbox) arrivano tutti nella richiesta: il motore non cambia.",
 )
 
-JOB_TTL_SECONDS = 3600
+# Memoria bassa: un risultato resta solo finché il chiamante non lo legge
+# (al massimo 10 minuti) e dopo ogni calcolo la memoria torna al sistema.
+JOB_TTL_SECONDS = 600
+MAX_JOBS = 50
 _executor = ThreadPoolExecutor(max_workers=int(os.environ.get("SOLVER_WORKERS", "2")))
 _jobs: dict[str, dict] = {}
 _jobs_lock = threading.Lock()
@@ -62,7 +67,10 @@ def health() -> dict:
 @app.post("/solve", response_model=SolveResponse, dependencies=[Depends(require_key)])
 def solve(req: SolveRequest) -> SolveResponse:
     """Genera i turni e risponde a calcolo finito (entro time_limit_seconds)."""
-    return solver.solve(req)
+    try:
+        return solver.solve(req)
+    finally:
+        _release_memory()
 
 
 class JobCreated(BaseModel):
@@ -81,6 +89,21 @@ def _gc_jobs() -> None:
     with _jobs_lock:
         for k in [k for k, v in _jobs.items() if now - v["created"] > JOB_TTL_SECONDS]:
             del _jobs[k]
+        done = sorted((v["created"], k) for k, v in _jobs.items() if v["status"] != "SOLVING")
+        for _, k in done[: max(0, len(_jobs) - MAX_JOBS)]:
+            del _jobs[k]
+
+
+try:
+    _libc = ctypes.CDLL("libc.so.6")
+except OSError:  # non Linux (sviluppo locale)
+    _libc = None
+
+
+def _release_memory() -> None:
+    gc.collect()
+    if _libc is not None:
+        _libc.malloc_trim(0)
 
 
 def _run_job(job_id: str, req: SolveRequest) -> None:
@@ -91,6 +114,8 @@ def _run_job(job_id: str, req: SolveRequest) -> None:
     except Exception as exc:  # noqa: BLE001 — l'errore torna al chiamante, non uccide il worker
         with _jobs_lock:
             _jobs[job_id].update(status="FAILED", error=f"{type(exc).__name__}: {exc}")
+    finally:
+        _release_memory()
 
 
 @app.post("/jobs", response_model=JobCreated, status_code=202, dependencies=[Depends(require_key)])
@@ -108,8 +133,10 @@ def create_job(req: SolveRequest) -> JobCreated:
 def get_job(job_id: str) -> JobState:
     with _jobs_lock:
         job = _jobs.get(job_id)
+        if job is not None and job["status"] != "SOLVING":
+            del _jobs[job_id]  # consegnato: non serve tenerlo
     if job is None:
-        raise HTTPException(status_code=404, detail="job non trovato (scaduto dopo un'ora o mai creato)")
+        raise HTTPException(status_code=404, detail="job non trovato (già letto, scaduto dopo 10 minuti o mai creato)")
     return JobState(job_id=job_id, status=job["status"], result=job["result"], error=job["error"])
 
 

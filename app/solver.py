@@ -22,6 +22,7 @@ preferenze fortissime: relaxed_hard=true e violations dice quali sono saltate.
 
 from __future__ import annotations
 
+import os
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -715,7 +716,7 @@ def _build_and_solve(req: SolveRequest, ctx: _Ctx, *, relax_hard: bool, check_mo
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit or req.time_limit_seconds
-    solver.parameters.num_workers = 8
+    solver.parameters.num_workers = int(os.environ.get("SOLVER_THREADS", "4"))
     solver.parameters.random_seed = 7
     status = solver.Solve(model)
     return solver, status, x, conds, errors

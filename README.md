@@ -238,4 +238,6 @@ docker build -t ciaoteam-motore . && docker run --rm -p 8000:8000 -e API_KEY=pro
 
 `Dockerfile` nella radice; `railway.json` imposta il controllo di salute su
 `/health`. Variabili: `API_KEY` (consigliata), `SOLVER_WORKERS` (job in parallelo,
-default 2). Railway passa la porta in `PORT`.
+default 2), `SOLVER_THREADS` (thread CP-SAT per calcolo, default 4). Railway passa la
+porta in `PORT`. Memoria: un job si cancella appena letto (al massimo dopo 10 minuti,
+non più di 50 in memoria) e dopo ogni calcolo la memoria torna al sistema.
