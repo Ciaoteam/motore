@@ -233,3 +233,12 @@ def test_ore_della_scheda_per_settimana_su_due_settimane():
         for e in ("anna", "bea"):
             n = sum(1 for a in r.assignments if a.employee_id == e and ws <= str(a.date) <= we)
             assert n == 2, (e, ws, n)
+
+
+def test_controllo_buchi_con_e_senza_competenza():
+    grid = GRID + [{"role": "Sala", "start": "12:00", "end": "15:00", "headcount": 1, "required_skill": "Responsabile"}]
+    res = check_schedule(ScheduleCheckRequest.model_validate({
+        "week_start": MON, "horizon_days": 1, "employees": [emp("anna")], "requirement_rules": grid,
+    }))
+    assert sorted((o.start, o.required_skill) for o in res.open_slots) == [("12:00", "responsabile"), ("18:00", None)] \
+        or sorted((o.start, o.required_skill or "") for o in res.open_slots) == [("12:00", "Responsabile"), ("18:00", "")]

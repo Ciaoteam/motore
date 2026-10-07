@@ -1206,7 +1206,7 @@ def check_schedule(req: ScheduleCheckRequest) -> ScheduleCheckResponse:
         violations=violations,
         rule_errors=errors,
         open_slots=[OpenSlot(date=k[0], start=k[1], end=k[2], role=k[3], required_skill=k[4], missing=n)
-                    for k, n in sorted(groups.items())],
+                    for k, n in sorted(groups.items(), key=lambda kv: tuple("" if v is None else str(v) for v in kv[0]))],
         employees=summary,
         warnings=list(dict.fromkeys(ctx.warnings)),
     )
