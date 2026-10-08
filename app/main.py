@@ -70,7 +70,7 @@ def health() -> dict:
 
 @app.post("/solve", response_model=SolveResponse, dependencies=[Depends(require_key)])
 def solve(req: SolveRequest) -> SolveResponse:
-    """Genera i turni e risponde a calcolo finito (entro time_limit_seconds)."""
+    """Genera i turni e risponde a calcolo finito."""
     try:
         return solver.solve(req)
     finally:
@@ -91,7 +91,8 @@ class JobState(BaseModel):
 def _gc_jobs() -> None:
     now = time.time()
     with _jobs_lock:
-        for k in [k for k, v in _jobs.items() if now - v["created"] > JOB_TTL_SECONDS]:
+        # Un calcolo in corso non si cancella mai: scade solo il risultato, dopo la fine.
+        for k in [k for k, v in _jobs.items() if v["status"] != "SOLVING" and now - v.get("finished", v["created"]) > JOB_TTL_SECONDS]:
             del _jobs[k]
         done = sorted((v["created"], k) for k, v in _jobs.items() if v["status"] != "SOLVING")
         for _, k in done[: max(0, len(_jobs) - MAX_JOBS)]:
@@ -114,10 +115,10 @@ def _run_job(job_id: str, req: SolveRequest) -> None:
     try:
         res = solver.solve(req)
         with _jobs_lock:
-            _jobs[job_id].update(status="DONE", result=res)
+            _jobs[job_id].update(status="DONE", result=res, finished=time.time())
     except Exception as exc:  # noqa: BLE001 — l'errore torna al chiamante, non uccide il worker
         with _jobs_lock:
-            _jobs[job_id].update(status="FAILED", error=f"{type(exc).__name__}: {exc}")
+            _jobs[job_id].update(status="FAILED", error=f"{type(exc).__name__}: {exc}", finished=time.time())
     finally:
         _release_memory()
 

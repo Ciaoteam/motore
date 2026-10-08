@@ -23,6 +23,7 @@ preferenze fortissime: relaxed_hard=true e violations dice quali sono saltate.
 from __future__ import annotations
 
 import os
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -920,11 +921,57 @@ def _build_and_solve(req: SolveRequest, ctx: _Ctx, *, relax_hard: bool, check_mo
     model.Maximize(sum(obj) if obj else 0)
 
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = time_limit or req.time_limit_seconds
+    limit = time_limit or req.time_limit_seconds
+    solver.parameters.max_time_in_seconds = limit or float(os.environ.get("SOLVER_MAX_SECONDS", "900"))
     solver.parameters.num_workers = int(os.environ.get("SOLVER_THREADS", "4"))
     solver.parameters.random_seed = 7
-    status = solver.Solve(model)
+    if limit:
+        status = solver.Solve(model)
+    else:
+        # Quanto serve: si ferma alla soluzione ottima o quando smette di migliorare.
+        status = _solve_until_stall(solver, model)
     return solver, status, x, conds, errors
+
+
+class _Progress(cp_model.CpSolverSolutionCallback):
+    """Segna quando la soluzione migliora per l'ultima volta."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.best: Optional[float] = None
+        self.last_improvement = time.monotonic()
+
+    def on_solution_callback(self) -> None:
+        v = self.ObjectiveValue()
+        if self.best is None or v > self.best + 1e-9:
+            self.best = v
+            self.last_improvement = time.monotonic()
+
+
+def _solve_until_stall(solver: cp_model.CpSolver, model: cp_model.CpModel) -> int:
+    """Ferma la ricerca quando non migliora da un po': almeno STALL_MIN secondi e
+    almeno un quarto del tempo già speso (i problemi grandi hanno più margine)."""
+    stall_min = float(os.environ.get("SOLVER_STALL_SECONDS", "10"))
+    progress = _Progress()
+    started = time.monotonic()
+    done = threading.Event()
+
+    def watch() -> None:
+        while not done.wait(1.0):
+            if progress.best is None:
+                continue
+            now = time.monotonic()
+            quiet = now - progress.last_improvement
+            if quiet >= max(stall_min, 0.25 * (now - started)):
+                solver.StopSearch()  # sicuro da un altro thread
+                return
+
+    t = threading.Thread(target=watch, daemon=True)
+    t.start()
+    try:
+        return solver.Solve(model, progress)
+    finally:
+        done.set()
 
 
 def _violations(solver, conds: list[_Cond]) -> list[Violation]:

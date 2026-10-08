@@ -265,3 +265,10 @@ def test_within_formato_sbagliato_rifiutato():
         "rules": [{"id": "w", "label": "w", "code": 'hard(works("luca", within="18") == 0)'}],
     }))
     assert not res.ok and "within" in res.rule_errors[0].error
+
+
+def test_senza_limite_di_tempo_si_ferma_alla_soluzione_ottima():
+    r = solve(SolveRequest.model_validate({
+        "week_start": MON, "employees": [emp("anna"), emp("bea")], "requirement_rules": GRID,
+    }))
+    assert r.status == "OPTIMAL" and len(r.assignments) == 7

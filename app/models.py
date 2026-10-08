@@ -216,7 +216,11 @@ class Event(BaseModel):
 
 class SolveRequest(BaseModel):
     week_start: Optional[date] = None
-    time_limit_seconds: float = Field(default=20, gt=0, le=120)
+    time_limit_seconds: Optional[float] = Field(
+        default=None, gt=0, le=1800,
+        description="Limite di tempo. null = quanto serve: si ferma alla soluzione ottima o quando smette di "
+        "migliorare, con un tetto di sicurezza (SOLVER_MAX_SECONDS).",
+    )
     settings: Settings = Field(default_factory=Settings)
     employees: list[Employee]
     horizon_days: int = Field(default=7, ge=1, le=31, description="Giorni da pianificare a partire da week_start.")
