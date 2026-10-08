@@ -922,7 +922,7 @@ def _build_and_solve(req: SolveRequest, ctx: _Ctx, *, relax_hard: bool, check_mo
 
     solver = cp_model.CpSolver()
     limit = time_limit or req.time_limit_seconds
-    solver.parameters.max_time_in_seconds = limit or float(os.environ.get("SOLVER_MAX_SECONDS", "900"))
+    solver.parameters.max_time_in_seconds = limit or float(os.environ.get("SOLVER_MAX_SECONDS", "600"))
     solver.parameters.num_workers = int(os.environ.get("SOLVER_THREADS", "4"))
     solver.parameters.random_seed = 7
     if limit:
