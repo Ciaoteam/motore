@@ -242,3 +242,26 @@ def test_controllo_buchi_con_e_senza_competenza():
     }))
     assert sorted((o.start, o.required_skill) for o in res.open_slots) == [("12:00", "responsabile"), ("18:00", None)] \
         or sorted((o.start, o.required_skill or "") for o in res.open_slots) == [("12:00", "Responsabile"), ("18:00", "")]
+
+
+def test_within_conta_solo_i_turni_dentro_la_fascia():
+    # "Luca, quando lavora, solo turni dentro 18:00-02:00": 16-23 tocca la fascia ma non ci sta dentro.
+    grid = [{"role": "Sala", "start": "16:00", "end": "23:00", "headcount": 1},
+            {"role": "Sala", "start": "18:00", "end": "01:00", "headcount": 1}]
+    code = 'hard(works("luca") == works("luca", within="18:00-02:00"))'
+    r = solve(SolveRequest.model_validate({
+        "week_start": MON, "horizon_days": 1, "time_limit_seconds": 5,
+        "employees": [emp("luca"), emp("bea")], "requirement_rules": grid,
+        "rules": [{"id": "w", "label": "w", "code": code, "about": ["luca"]}],
+    }))
+    luca = [(a.start, a.end) for a in r.assignments if a.employee_id == "luca"]
+    assert ("16:00", "23:00") not in luca
+    assert not [v for v in r.violations if v.rule_id == "w"]
+
+
+def test_within_formato_sbagliato_rifiutato():
+    res = validate_rules(RulesValidateRequest.model_validate({
+        "week_start": MON, "employees": [emp("luca")], "requirement_rules": GRID,
+        "rules": [{"id": "w", "label": "w", "code": 'hard(works("luca", within="18") == 0)'}],
+    }))
+    assert not res.ok and "within" in res.rule_errors[0].error

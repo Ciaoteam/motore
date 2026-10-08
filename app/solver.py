@@ -461,7 +461,7 @@ class _RuleApi:
     i propri turni; le sue condizioni sono preferenze (peso massimo 50) finché
     il titolare non approva la regola."""
 
-    _FILTERS = ("date", "dates", "days", "start", "end", "role", "skill", "category", "status")
+    _FILTERS = ("date", "dates", "days", "start", "end", "within", "role", "skill", "category", "status")
 
     def __init__(self, ctx: _Ctx, model: cp_model.CpModel, x, by_emp, rule: CodeRule, *, relax_hard: bool,
                  check_mode: bool, conds: list, penalties: list, day_cache: dict):
@@ -508,6 +508,16 @@ class _RuleApi:
             raise sandbox.RuleRejected(f"filtri sconosciuti: {', '.join(sorted(bad))}")
         if (kw.get("start") is None) != (kw.get("end") is None):
             raise sandbox.RuleRejected("start ed end vanno indicati insieme")
+        w = kw.get("within")
+        if w is not None:
+            parts = str(w).replace("–", "-").split("-")
+            if len(parts) != 2:
+                raise sandbox.RuleRejected('within va scritto "HH:MM-HH:MM"')
+            try:
+                _hm(parts[0].strip()), _hm(parts[1].strip())
+            except Exception:
+                raise sandbox.RuleRejected('within va scritto "HH:MM-HH:MM"')
+            kw = {**kw, "within": (parts[0].strip(), parts[1].strip())}
         return kw
 
     def _match(self, s: _Shift, f: dict, validity: bool = True) -> bool:
@@ -529,6 +539,14 @@ class _RuleApi:
             return False
         if f.get("start") is not None and not _overlaps((s.start, s.end), self.ctx.window(s.date, f["start"], f["end"])):
             return False
+        if f.get("within") is not None:
+            ws, we = f["within"]
+            # Il turno sta tutto dentro la fascia (di quel giorno o, per le
+            # fasce che passano la mezzanotte, di quella del giorno prima).
+            inside = any(a <= s.start and s.end <= b
+                         for a, b in (self.ctx.window(s.date, ws, we), self.ctx.window(s.date - timedelta(days=1), ws, we)))
+            if not inside:
+                return False
         return True
 
     def _vars(self, eid: str, f: dict):
